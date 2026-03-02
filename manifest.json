@@ -1,0 +1,10 @@
+{
+    "id": "mengram",
+    "name": "Mengram",
+    "version": "1.0.0",
+    "minAppVersion": "1.0.0",
+    "description": "Sync your notes to Mengram AI memory. Auto-sync on save, search across all your memories.",
+    "author": "Ali Baizhanov",
+    "authorUrl": "https://mengram.io",
+    "isDesktopOnly": false
+}
