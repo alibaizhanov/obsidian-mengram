@@ -4,8 +4,8 @@ import { MengramClient, SearchResult } from './mengram-client';
 export class MengramSearchModal extends Modal {
     private client: MengramClient;
     private userId: string;
-    private resultsEl: HTMLElement;
-    private inputEl: HTMLInputElement;
+    private resultsEl!: HTMLElement;
+    private inputEl!: HTMLInputElement;
     private searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
     constructor(app: App, client: MengramClient, userId: string) {
@@ -19,7 +19,7 @@ export class MengramSearchModal extends Modal {
         contentEl.empty();
         contentEl.addClass('mengram-search-modal');
 
-        contentEl.createEl('h2', { text: 'Search Mengram Memories' });
+        contentEl.createEl('h2', { text: 'Search memories' });
 
         const inputContainer = contentEl.createDiv({ cls: 'mengram-search-input-container' });
         this.inputEl = inputContainer.createEl('input', {
@@ -32,7 +32,7 @@ export class MengramSearchModal extends Modal {
         this.inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                this.doSearch(this.inputEl.value);
+                void this.doSearch(this.inputEl.value);
             }
         });
 
@@ -41,7 +41,7 @@ export class MengramSearchModal extends Modal {
             this.searchTimeout = setTimeout(() => {
                 const query = this.inputEl.value.trim();
                 if (query.length >= 3) {
-                    this.doSearch(query);
+                    void this.doSearch(query);
                 }
             }, 500);
         });
@@ -74,10 +74,11 @@ export class MengramSearchModal extends Modal {
             for (const result of results) {
                 this.renderResult(result);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
             this.resultsEl.empty();
             this.resultsEl.createEl('p', {
-                text: `Search failed: ${err.message}`,
+                text: `Search failed: ${error.message}`,
                 cls: 'mengram-search-error',
             });
         }
@@ -117,7 +118,7 @@ export class MengramSearchModal extends Modal {
     private insertResult(result: SearchResult): void {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
         if (!activeView) {
-            this.createNoteFromResult(result);
+            void this.createNoteFromResult(result);
             return;
         }
 
