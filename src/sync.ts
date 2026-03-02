@@ -51,6 +51,10 @@ export class SyncEngine {
 
         const path = file.path;
 
+        // Exclude Obsidian config folder (uses configDir, not hardcoded)
+        const configDir = this.vault.configDir;
+        if (path.startsWith(configDir + '/')) return false;
+
         const excluded = this.parseFolderList(this.settings.excludedFolders);
         for (const folder of excluded) {
             if (path.startsWith(folder + '/') || path === folder) return false;
@@ -106,7 +110,7 @@ export class SyncEngine {
         if (!this.queue.some(f => f.path === file.path)) {
             this.queue.push(file);
         }
-        this.processQueue();
+        void this.processQueue();
     }
 
     private async processQueue(): Promise<void> {
@@ -127,7 +131,7 @@ export class SyncEngine {
 
     async syncFile(file: TFile): Promise<boolean> {
         if (!this.client) {
-            new Notice('Mengram: No API key configured');
+            new Notice('Mengram: no API key configured');
             return false;
         }
 
@@ -150,18 +154,19 @@ export class SyncEngine {
             this.statusCallback('synced');
 
             return true;
-        } catch (err: any) {
-            console.error(`Mengram: Failed to sync ${file.path}:`, err);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            console.error(`Mengram: failed to sync ${file.path}:`, error);
             delete this.state.fileHashes[file.path];
             this.statusCallback('error');
-            new Notice(`Mengram: Sync failed for ${file.basename}: ${err.message}`);
+            new Notice(`Mengram: sync failed for ${file.basename}: ${error.message}`);
             return false;
         }
     }
 
-    async syncVault(onProgress?: (current: number, total: number) => void): Promise<{ synced: number; skipped: number; errors: number }> {
+    async syncVault(): Promise<{ synced: number; skipped: number; errors: number }> {
         if (!this.client) {
-            new Notice('Mengram: No API key configured');
+            new Notice('Mengram: no API key configured');
             return { synced: 0, skipped: 0, errors: 0 };
         }
 
@@ -173,7 +178,6 @@ export class SyncEngine {
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            if (onProgress) onProgress(i + 1, total);
             this.statusCallback(`syncing ${i + 1}/${total}`);
 
             try {
@@ -199,8 +203,9 @@ export class SyncEngine {
                 }
 
                 await new Promise(r => setTimeout(r, 200));
-            } catch (err: any) {
-                console.error(`Mengram: Failed to sync ${file.path}:`, err);
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                console.error(`Mengram: failed to sync ${file.path}:`, error);
                 delete this.state.fileHashes[file.path];
                 errors++;
             }

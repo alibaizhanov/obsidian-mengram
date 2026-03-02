@@ -1,3 +1,5 @@
+import { requestUrl } from 'obsidian';
+
 export class MengramError extends Error {
     statusCode: number;
     constructor(message: string, statusCode: number) {
@@ -12,8 +14,8 @@ export interface SearchResult {
     type: string;
     score: number;
     facts: string[];
-    knowledge: any[];
-    relations: any[];
+    knowledge: Record<string, unknown>[];
+    relations: Record<string, unknown>[];
 }
 
 export interface AddTextResult {
@@ -33,8 +35,14 @@ export interface StatsResult {
 
 export interface JobResult {
     status: 'pending' | 'processing' | 'completed' | 'failed';
-    result?: any;
+    result?: Record<string, unknown>;
     error?: string;
+}
+
+interface ApiResponse {
+    results?: SearchResult[];
+    detail?: string;
+    [key: string]: unknown;
 }
 
 export class MengramClient {
@@ -49,7 +57,7 @@ export class MengramClient {
         this.timeout = options.timeout || 30000;
     }
 
-    private async _request(method: string, path: string, body?: any, params?: Record<string, string>): Promise<any> {
+    private async _request(method: string, path: string, body?: Record<string, unknown>, params?: Record<string, string>): Promise<ApiResponse> {
         let url = `${this.baseUrl}${path}`;
         if (params) {
             const qs = Object.entries(params)
@@ -66,55 +74,51 @@ export class MengramClient {
 
         let lastErr: Error | null = null;
         for (let attempt = 0; attempt < 3; attempt++) {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), this.timeout);
             try {
-                const res = await fetch(url, {
+                const response = await requestUrl({
+                    url,
                     method,
                     headers,
                     body: body ? JSON.stringify(body) : undefined,
-                    signal: controller.signal,
+                    throw: false,
                 });
-                const data = await res.json();
-                if (!res.ok) {
-                    if ([429, 502, 503, 504].includes(res.status) && attempt < 2) {
-                        lastErr = new MengramError(data.detail || `HTTP ${res.status}`, res.status);
+                const data = response.json as ApiResponse;
+                if (response.status >= 400) {
+                    if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
+                        lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
                         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
                         continue;
                     }
-                    throw new MengramError(data.detail || `HTTP ${res.status}`, res.status);
+                    throw new MengramError(data.detail || `HTTP ${response.status}`, response.status);
                 }
                 return data;
-            } catch (err: any) {
-                if (err instanceof MengramError) {
-                    if ([429, 502, 503, 504].includes(err.statusCode) && attempt < 2) {
-                        lastErr = err;
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                if (error instanceof MengramError) {
+                    if ([429, 502, 503, 504].includes(error.statusCode) && attempt < 2) {
+                        lastErr = error;
                         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
                         continue;
                     }
-                    throw err;
-                }
-                if (err.name === 'AbortError') {
-                    throw new MengramError(`Request timeout after ${this.timeout}ms`, 408);
+                    throw error;
                 }
                 if (attempt < 2) {
-                    lastErr = err;
+                    lastErr = error;
                     await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
                     continue;
                 }
-                throw new MengramError(err.message, 0);
-            } finally {
-                clearTimeout(timer);
+                throw new MengramError(error.message, 0);
             }
         }
         throw lastErr || new MengramError('Request failed after 3 attempts', 0);
     }
 
     async addText(text: string, options: { userId?: string } = {}): Promise<AddTextResult> {
-        return this._request('POST', '/v1/add_text', {
+        const data = await this._request('POST', '/v1/add_text', {
             text,
             user_id: options.userId || 'default',
         });
+        return data as unknown as AddTextResult;
     }
 
     async search(query: string, options: { userId?: string; limit?: number } = {}): Promise<SearchResult[]> {
@@ -131,7 +135,8 @@ export class MengramClient {
         if (options.userId && options.userId !== 'default') {
             params.sub_user_id = options.userId;
         }
-        return this._request('GET', '/v1/stats', undefined, params);
+        const data = await this._request('GET', '/v1/stats', undefined, params);
+        return data as unknown as StatsResult;
     }
 
     async waitForJob(jobId: string, options: { pollInterval?: number; maxWait?: number } = {}): Promise<JobResult> {
@@ -139,7 +144,7 @@ export class MengramClient {
         const maxWait = options.maxWait || 60000;
         const start = Date.now();
         while (Date.now() - start < maxWait) {
-            const job: JobResult = await this._request('GET', `/v1/jobs/${jobId}`);
+            const job = await this._request('GET', `/v1/jobs/${jobId}`) as unknown as JobResult;
             if (job.status === 'completed' || job.status === 'failed') {
                 return job;
             }

@@ -27,9 +27,10 @@ __export(main_exports, {
   default: () => MengramPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/mengram-client.ts
+var import_obsidian = require("obsidian");
 var MengramError = class extends Error {
   constructor(message, statusCode) {
     super(message);
@@ -58,54 +59,50 @@ var MengramClient = class {
     };
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), this.timeout);
       try {
-        const res = await fetch(url, {
+        const response = await (0, import_obsidian.requestUrl)({
+          url,
           method,
           headers,
           body: body ? JSON.stringify(body) : void 0,
-          signal: controller.signal
+          throw: false
         });
-        const data = await res.json();
-        if (!res.ok) {
-          if ([429, 502, 503, 504].includes(res.status) && attempt < 2) {
-            lastErr = new MengramError(data.detail || `HTTP ${res.status}`, res.status);
+        const data = response.json;
+        if (response.status >= 400) {
+          if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
+            lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
             await new Promise((r) => setTimeout(r, 1e3 * (attempt + 1)));
             continue;
           }
-          throw new MengramError(data.detail || `HTTP ${res.status}`, res.status);
+          throw new MengramError(data.detail || `HTTP ${response.status}`, response.status);
         }
         return data;
       } catch (err) {
-        if (err instanceof MengramError) {
-          if ([429, 502, 503, 504].includes(err.statusCode) && attempt < 2) {
-            lastErr = err;
+        const error = err instanceof Error ? err : new Error(String(err));
+        if (error instanceof MengramError) {
+          if ([429, 502, 503, 504].includes(error.statusCode) && attempt < 2) {
+            lastErr = error;
             await new Promise((r) => setTimeout(r, 1e3 * (attempt + 1)));
             continue;
           }
-          throw err;
-        }
-        if (err.name === "AbortError") {
-          throw new MengramError(`Request timeout after ${this.timeout}ms`, 408);
+          throw error;
         }
         if (attempt < 2) {
-          lastErr = err;
+          lastErr = error;
           await new Promise((r) => setTimeout(r, 1e3 * (attempt + 1)));
           continue;
         }
-        throw new MengramError(err.message, 0);
-      } finally {
-        clearTimeout(timer);
+        throw new MengramError(error.message, 0);
       }
     }
     throw lastErr || new MengramError("Request failed after 3 attempts", 0);
   }
   async addText(text, options = {}) {
-    return this._request("POST", "/v1/add_text", {
+    const data = await this._request("POST", "/v1/add_text", {
       text,
       user_id: options.userId || "default"
     });
+    return data;
   }
   async search(query, options = {}) {
     const data = await this._request("POST", "/v1/search", {
@@ -120,7 +117,8 @@ var MengramClient = class {
     if (options.userId && options.userId !== "default") {
       params.sub_user_id = options.userId;
     }
-    return this._request("GET", "/v1/stats", void 0, params);
+    const data = await this._request("GET", "/v1/stats", void 0, params);
+    return data;
   }
   async waitForJob(jobId, options = {}) {
     const interval = options.pollInterval || 1500;
@@ -138,17 +136,17 @@ var MengramClient = class {
 };
 
 // src/settings.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 var DEFAULT_SETTINGS = {
   apiKey: "",
   autoSync: true,
   syncFolders: "",
-  excludedFolders: ".obsidian,.trash",
+  excludedFolders: ".trash",
   debounceMs: 2e3,
   userId: "default",
   baseUrl: "https://mengram.io"
 };
-var MengramSettingTab = class extends import_obsidian.PluginSettingTab {
+var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -156,8 +154,8 @@ var MengramSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Mengram Settings" });
-    new import_obsidian.Setting(containerEl).setName("API Key").setDesc("Your Mengram API key (starts with om-). Get one at mengram.io/dashboard").addText((text) => {
+    new import_obsidian2.Setting(containerEl).setName("Mengram settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("API key").setDesc("Your Mengram API key (starts with om-). Get one at mengram.io/dashboard.").addText((text) => {
       text.setPlaceholder("om-...");
       text.setValue(this.plugin.settings.apiKey);
       text.inputEl.type = "password";
@@ -167,27 +165,27 @@ var MengramSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.reinitClient();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Auto-sync on save").setDesc("Automatically sync notes to Mengram when you save them").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoSync).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Auto-sync on save").setDesc("Automatically sync notes to Mengram when you save them.").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoSync).onChange(async (value) => {
       this.plugin.settings.autoSync = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Sync folders").setDesc("Only sync notes in these folders (comma-separated). Leave empty to sync all.").addText((text) => text.setPlaceholder("notes,projects,journal").setValue(this.plugin.settings.syncFolders).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Sync folders").setDesc("Only sync notes in these folders (comma-separated). Leave empty to sync all.").addText((text) => text.setPlaceholder("notes,projects,journal").setValue(this.plugin.settings.syncFolders).onChange(async (value) => {
       this.plugin.settings.syncFolders = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Excluded folders").setDesc("Never sync notes in these folders (comma-separated)").addText((text) => text.setPlaceholder(".obsidian,.trash,templates").setValue(this.plugin.settings.excludedFolders).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Excluded folders").setDesc("Never sync notes in these folders (comma-separated).").addText((text) => text.setPlaceholder(".trash,templates").setValue(this.plugin.settings.excludedFolders).onChange(async (value) => {
       this.plugin.settings.excludedFolders = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Debounce delay (seconds)").setDesc("Wait this many seconds after editing before syncing").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.debounceMs / 1e3).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Debounce delay (seconds)").setDesc("Wait this many seconds after editing before syncing.").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.debounceMs / 1e3).setDynamicTooltip().onChange(async (value) => {
       this.plugin.settings.debounceMs = value * 1e3;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("User ID").setDesc("Isolate memories per user (for multi-user setups)").addText((text) => text.setPlaceholder("default").setValue(this.plugin.settings.userId).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("User ID").setDesc("Isolate memories per user (for multi-user setups).").addText((text) => text.setPlaceholder("default").setValue(this.plugin.settings.userId).onChange(async (value) => {
       this.plugin.settings.userId = value.trim() || "default";
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("Base URL").setDesc("API base URL. Only change for self-hosted instances.").addText((text) => text.setPlaceholder("https://mengram.io").setValue(this.plugin.settings.baseUrl).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Base URL").setDesc("API base URL. Only change for self-hosted instances.").addText((text) => text.setPlaceholder("https://mengram.io").setValue(this.plugin.settings.baseUrl).onChange(async (value) => {
       this.plugin.settings.baseUrl = value.trim() || "https://mengram.io";
       await this.plugin.saveSettings();
       this.plugin.reinitClient();
@@ -196,7 +194,7 @@ var MengramSettingTab = class extends import_obsidian.PluginSettingTab {
 };
 
 // src/sync.ts
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 var SyncEngine = class {
   constructor(vault, settings, state, statusCallback, saveState) {
     this.client = null;
@@ -226,6 +224,9 @@ var SyncEngine = class {
     if (file.extension !== "md")
       return false;
     const path = file.path;
+    const configDir = this.vault.configDir;
+    if (path.startsWith(configDir + "/"))
+      return false;
     const excluded = this.parseFolderList(this.settings.excludedFolders);
     for (const folder of excluded) {
       if (path.startsWith(folder + "/") || path === folder)
@@ -275,7 +276,7 @@ var SyncEngine = class {
     if (!this.queue.some((f) => f.path === file.path)) {
       this.queue.push(file);
     }
-    this.processQueue();
+    void this.processQueue();
   }
   async processQueue() {
     if (this.processing)
@@ -294,7 +295,7 @@ var SyncEngine = class {
   }
   async syncFile(file) {
     if (!this.client) {
-      new import_obsidian2.Notice("Mengram: No API key configured");
+      new import_obsidian3.Notice("Mengram: no API key configured");
       return false;
     }
     try {
@@ -314,16 +315,17 @@ ${content}`;
       this.statusCallback("synced");
       return true;
     } catch (err) {
-      console.error(`Mengram: Failed to sync ${file.path}:`, err);
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error(`Mengram: failed to sync ${file.path}:`, error);
       delete this.state.fileHashes[file.path];
       this.statusCallback("error");
-      new import_obsidian2.Notice(`Mengram: Sync failed for ${file.basename}: ${err.message}`);
+      new import_obsidian3.Notice(`Mengram: sync failed for ${file.basename}: ${error.message}`);
       return false;
     }
   }
-  async syncVault(onProgress) {
+  async syncVault() {
     if (!this.client) {
-      new import_obsidian2.Notice("Mengram: No API key configured");
+      new import_obsidian3.Notice("Mengram: no API key configured");
       return { synced: 0, skipped: 0, errors: 0 };
     }
     const files = this.vault.getMarkdownFiles().filter((f) => this.shouldSync(f));
@@ -333,8 +335,6 @@ ${content}`;
     let errors = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (onProgress)
-        onProgress(i + 1, total);
       this.statusCallback(`syncing ${i + 1}/${total}`);
       try {
         const content = await this.vault.cachedRead(file);
@@ -358,7 +358,8 @@ ${content}`;
         }
         await new Promise((r) => setTimeout(r, 200));
       } catch (err) {
-        console.error(`Mengram: Failed to sync ${file.path}:`, err);
+        const error = err instanceof Error ? err : new Error(String(err));
+        console.error(`Mengram: failed to sync ${file.path}:`, error);
         delete this.state.fileHashes[file.path];
         errors++;
       }
@@ -377,8 +378,8 @@ ${content}`;
 };
 
 // src/search-modal.ts
-var import_obsidian3 = require("obsidian");
-var MengramSearchModal = class extends import_obsidian3.Modal {
+var import_obsidian4 = require("obsidian");
+var MengramSearchModal = class extends import_obsidian4.Modal {
   constructor(app, client, userId) {
     super(app);
     this.searchTimeout = null;
@@ -389,7 +390,7 @@ var MengramSearchModal = class extends import_obsidian3.Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("mengram-search-modal");
-    contentEl.createEl("h2", { text: "Search Mengram Memories" });
+    contentEl.createEl("h2", { text: "Search memories" });
     const inputContainer = contentEl.createDiv({ cls: "mengram-search-input-container" });
     this.inputEl = inputContainer.createEl("input", {
       type: "text",
@@ -400,7 +401,7 @@ var MengramSearchModal = class extends import_obsidian3.Modal {
     this.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        this.doSearch(this.inputEl.value);
+        void this.doSearch(this.inputEl.value);
       }
     });
     this.inputEl.addEventListener("input", () => {
@@ -409,7 +410,7 @@ var MengramSearchModal = class extends import_obsidian3.Modal {
       this.searchTimeout = setTimeout(() => {
         const query = this.inputEl.value.trim();
         if (query.length >= 3) {
-          this.doSearch(query);
+          void this.doSearch(query);
         }
       }, 500);
     });
@@ -437,9 +438,10 @@ var MengramSearchModal = class extends import_obsidian3.Modal {
         this.renderResult(result);
       }
     } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
       this.resultsEl.empty();
       this.resultsEl.createEl("p", {
-        text: `Search failed: ${err.message}`,
+        text: `Search failed: ${error.message}`,
         cls: "mengram-search-error"
       });
     }
@@ -471,9 +473,9 @@ var MengramSearchModal = class extends import_obsidian3.Modal {
     card.setAttribute("title", "Click to insert into current note");
   }
   insertResult(result) {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (!activeView) {
-      this.createNoteFromResult(result);
+      void this.createNoteFromResult(result);
       return;
     }
     const editor = activeView.editor;
@@ -520,7 +522,7 @@ var MengramSearchModal = class extends import_obsidian3.Modal {
 };
 
 // src/main.ts
-var MengramPlugin = class extends import_obsidian4.Plugin {
+var MengramPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -545,21 +547,21 @@ var MengramPlugin = class extends import_obsidian4.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
-        if (file instanceof import_obsidian4.TFile) {
+        if (file instanceof import_obsidian5.TFile) {
           this.syncEngine.onFileModified(file);
         }
       })
     );
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
-        if (file instanceof import_obsidian4.TFile) {
+        if (file instanceof import_obsidian5.TFile) {
           delete this.syncState.fileHashes[file.path];
         }
       })
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
-        if (file instanceof import_obsidian4.TFile && this.syncState.fileHashes[oldPath]) {
+        if (file instanceof import_obsidian5.TFile && this.syncState.fileHashes[oldPath]) {
           this.syncState.fileHashes[file.path] = this.syncState.fileHashes[oldPath];
           delete this.syncState.fileHashes[oldPath];
         }
@@ -570,7 +572,7 @@ var MengramPlugin = class extends import_obsidian4.Plugin {
       name: "Search memories",
       callback: () => {
         if (!this.client) {
-          new import_obsidian4.Notice("Mengram: Please configure your API key in settings");
+          new import_obsidian5.Notice("Mengram: please configure your API key in settings");
           return;
         }
         new MengramSearchModal(
@@ -587,7 +589,7 @@ var MengramPlugin = class extends import_obsidian4.Plugin {
         const file = this.app.workspace.getActiveFile();
         if (file && file.extension === "md") {
           if (!checking) {
-            this.syncCurrentFile(file);
+            void this.syncCurrentFile(file);
           }
           return true;
         }
@@ -597,20 +599,18 @@ var MengramPlugin = class extends import_obsidian4.Plugin {
     this.addCommand({
       id: "sync-vault",
       name: "Sync entire vault",
-      callback: () => this.syncVault()
+      callback: () => void this.syncVault()
     });
     this.addCommand({
       id: "show-stats",
       name: "Show memory stats",
-      callback: () => this.showStats()
+      callback: () => void this.showStats()
     });
     this.addSettingTab(new MengramSettingTab(this.app, this));
-    console.log("Mengram plugin loaded");
   }
   onunload() {
     var _a;
     (_a = this.syncEngine) == null ? void 0 : _a.destroy();
-    console.log("Mengram plugin unloaded");
   }
   reinitClient() {
     var _a;
@@ -656,35 +656,35 @@ var MengramPlugin = class extends import_obsidian4.Plugin {
   }
   async syncCurrentFile(file) {
     if (!this.client) {
-      new import_obsidian4.Notice("Mengram: Please configure your API key in settings");
+      new import_obsidian5.Notice("Mengram: please configure your API key in settings");
       return;
     }
-    new import_obsidian4.Notice(`Mengram: Syncing ${file.basename}...`);
+    new import_obsidian5.Notice(`Mengram: syncing ${file.basename}...`);
     const success = await this.syncEngine.syncFile(file);
     if (success) {
-      new import_obsidian4.Notice(`Mengram: ${file.basename} synced`);
+      new import_obsidian5.Notice(`Mengram: ${file.basename} synced`);
     }
   }
   async syncVault() {
     if (!this.client) {
-      new import_obsidian4.Notice("Mengram: Please configure your API key in settings");
+      new import_obsidian5.Notice("Mengram: please configure your API key in settings");
       return;
     }
-    new import_obsidian4.Notice("Mengram: Starting vault sync...");
+    new import_obsidian5.Notice("Mengram: starting vault sync...");
     const result = await this.syncEngine.syncVault();
-    new import_obsidian4.Notice(
-      `Mengram: Vault sync complete. Synced: ${result.synced}, Skipped: ${result.skipped}, Errors: ${result.errors}`
+    new import_obsidian5.Notice(
+      `Mengram: vault sync complete. Synced: ${result.synced}, skipped: ${result.skipped}, errors: ${result.errors}`
     );
   }
   async showStats() {
     if (!this.client) {
-      new import_obsidian4.Notice("Mengram: Please configure your API key in settings");
+      new import_obsidian5.Notice("Mengram: please configure your API key in settings");
       return;
     }
     try {
       const stats = await this.client.stats({ userId: this.settings.userId });
-      new import_obsidian4.Notice(
-        `Mengram Stats:
+      new import_obsidian5.Notice(
+        `Mengram stats:
 Entities: ${stats.entities}
 Facts: ${stats.facts}
 Knowledge: ${stats.knowledge}
@@ -692,7 +692,8 @@ Relations: ${stats.relations}`,
         1e4
       );
     } catch (err) {
-      new import_obsidian4.Notice(`Mengram: Failed to get stats: ${err.message}`);
+      const error = err instanceof Error ? err : new Error(String(err));
+      new import_obsidian5.Notice(`Mengram: failed to get stats: ${error.message}`);
     }
   }
 };

@@ -15,7 +15,7 @@ export const DEFAULT_SETTINGS: MengramSettings = {
     apiKey: '',
     autoSync: true,
     syncFolders: '',
-    excludedFolders: '.obsidian,.trash',
+    excludedFolders: '.trash',
     debounceMs: 2000,
     userId: 'default',
     baseUrl: 'https://mengram.io',
@@ -33,11 +33,13 @@ export class MengramSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Mengram Settings' });
+        new Setting(containerEl)
+            .setName('Mengram settings')
+            .setHeading();
 
         new Setting(containerEl)
-            .setName('API Key')
-            .setDesc('Your Mengram API key (starts with om-). Get one at mengram.io/dashboard')
+            .setName('API key')
+            .setDesc('Your Mengram API key (starts with om-). Get one at mengram.io/dashboard.')
             .addText(text => {
                 text.setPlaceholder('om-...');
                 text.setValue(this.plugin.settings.apiKey);
@@ -51,7 +53,7 @@ export class MengramSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Auto-sync on save')
-            .setDesc('Automatically sync notes to Mengram when you save them')
+            .setDesc('Automatically sync notes to Mengram when you save them.')
             .addToggle(toggle => toggle
                 .setValue(this.plugin.settings.autoSync)
                 .onChange(async (value) => {
@@ -72,9 +74,9 @@ export class MengramSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Excluded folders')
-            .setDesc('Never sync notes in these folders (comma-separated)')
+            .setDesc('Never sync notes in these folders (comma-separated).')
             .addText(text => text
-                .setPlaceholder('.obsidian,.trash,templates')
+                .setPlaceholder('.trash,templates')
                 .setValue(this.plugin.settings.excludedFolders)
                 .onChange(async (value) => {
                     this.plugin.settings.excludedFolders = value;
@@ -83,7 +85,7 @@ export class MengramSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Debounce delay (seconds)')
-            .setDesc('Wait this many seconds after editing before syncing')
+            .setDesc('Wait this many seconds after editing before syncing.')
             .addSlider(slider => slider
                 .setLimits(1, 10, 1)
                 .setValue(this.plugin.settings.debounceMs / 1000)
@@ -95,7 +97,7 @@ export class MengramSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('User ID')
-            .setDesc('Isolate memories per user (for multi-user setups)')
+            .setDesc('Isolate memories per user (for multi-user setups).')
             .addText(text => text
                 .setPlaceholder('default')
                 .setValue(this.plugin.settings.userId)

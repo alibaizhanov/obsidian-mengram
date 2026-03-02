@@ -36,7 +36,6 @@ export default class MengramPlugin extends Plugin {
             () => this.savePluginData(),
         );
 
-        // Auto-sync on file modify
         this.registerEvent(
             this.app.vault.on('modify', (file) => {
                 if (file instanceof TFile) {
@@ -45,7 +44,6 @@ export default class MengramPlugin extends Plugin {
             })
         );
 
-        // Clean up hash when file is deleted
         this.registerEvent(
             this.app.vault.on('delete', (file) => {
                 if (file instanceof TFile) {
@@ -54,7 +52,6 @@ export default class MengramPlugin extends Plugin {
             })
         );
 
-        // Update hash key when file is renamed
         this.registerEvent(
             this.app.vault.on('rename', (file, oldPath) => {
                 if (file instanceof TFile && this.syncState.fileHashes[oldPath]) {
@@ -64,13 +61,12 @@ export default class MengramPlugin extends Plugin {
             })
         );
 
-        // Command: Search memories
         this.addCommand({
             id: 'search-memories',
             name: 'Search memories',
             callback: () => {
                 if (!this.client) {
-                    new Notice('Mengram: Please configure your API key in settings');
+                    new Notice('Mengram: please configure your API key in settings');
                     return;
                 }
                 new MengramSearchModal(
@@ -81,7 +77,6 @@ export default class MengramPlugin extends Plugin {
             },
         });
 
-        // Command: Sync current file
         this.addCommand({
             id: 'sync-current-file',
             name: 'Sync current file',
@@ -89,7 +84,7 @@ export default class MengramPlugin extends Plugin {
                 const file = this.app.workspace.getActiveFile();
                 if (file && file.extension === 'md') {
                     if (!checking) {
-                        this.syncCurrentFile(file);
+                        void this.syncCurrentFile(file);
                     }
                     return true;
                 }
@@ -97,28 +92,23 @@ export default class MengramPlugin extends Plugin {
             },
         });
 
-        // Command: Sync entire vault
         this.addCommand({
             id: 'sync-vault',
             name: 'Sync entire vault',
-            callback: () => this.syncVault(),
+            callback: () => void this.syncVault(),
         });
 
-        // Command: Show stats
         this.addCommand({
             id: 'show-stats',
             name: 'Show memory stats',
-            callback: () => this.showStats(),
+            callback: () => void this.showStats(),
         });
 
         this.addSettingTab(new MengramSettingTab(this.app, this));
-
-        console.log('Mengram plugin loaded');
     }
 
     onunload(): void {
         this.syncEngine?.destroy();
-        console.log('Mengram plugin unloaded');
     }
 
     reinitClient(): void {
@@ -170,11 +160,11 @@ export default class MengramPlugin extends Plugin {
 
     private async syncCurrentFile(file: TFile): Promise<void> {
         if (!this.client) {
-            new Notice('Mengram: Please configure your API key in settings');
+            new Notice('Mengram: please configure your API key in settings');
             return;
         }
 
-        new Notice(`Mengram: Syncing ${file.basename}...`);
+        new Notice(`Mengram: syncing ${file.basename}...`);
         const success = await this.syncEngine.syncFile(file);
         if (success) {
             new Notice(`Mengram: ${file.basename} synced`);
@@ -183,38 +173,39 @@ export default class MengramPlugin extends Plugin {
 
     private async syncVault(): Promise<void> {
         if (!this.client) {
-            new Notice('Mengram: Please configure your API key in settings');
+            new Notice('Mengram: please configure your API key in settings');
             return;
         }
 
-        new Notice('Mengram: Starting vault sync...');
+        new Notice('Mengram: starting vault sync...');
 
         const result = await this.syncEngine.syncVault();
 
         new Notice(
-            `Mengram: Vault sync complete. ` +
-            `Synced: ${result.synced}, Skipped: ${result.skipped}, Errors: ${result.errors}`
+            `Mengram: vault sync complete. ` +
+            `Synced: ${result.synced}, skipped: ${result.skipped}, errors: ${result.errors}`
         );
     }
 
     private async showStats(): Promise<void> {
         if (!this.client) {
-            new Notice('Mengram: Please configure your API key in settings');
+            new Notice('Mengram: please configure your API key in settings');
             return;
         }
 
         try {
             const stats = await this.client.stats({ userId: this.settings.userId });
             new Notice(
-                `Mengram Stats:\n` +
+                `Mengram stats:\n` +
                 `Entities: ${stats.entities}\n` +
                 `Facts: ${stats.facts}\n` +
                 `Knowledge: ${stats.knowledge}\n` +
                 `Relations: ${stats.relations}`,
                 10000
             );
-        } catch (err: any) {
-            new Notice(`Mengram: Failed to get stats: ${err.message}`);
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err : new Error(String(err));
+            new Notice(`Mengram: failed to get stats: ${error.message}`);
         }
     }
 }
