@@ -154,9 +154,8 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Mengram").setHeading();
-    new import_obsidian2.Setting(containerEl).setName("API key").setDesc("Your Mengram API key (starts with om-). Get one at mengram.io/dashboard.").addText((text) => {
-      text.setPlaceholder("om-...");
+    new import_obsidian2.Setting(containerEl).setName("API key").setDesc("Your API key (starts with `om-`). Get one at mengram.io/dashboard.").addText((text) => {
+      text.setPlaceholder("Enter API key");
       text.setValue(this.plugin.settings.apiKey);
       text.inputEl.type = "password";
       text.onChange(async (value) => {
@@ -165,11 +164,11 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.reinitClient();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Auto-sync on save").setDesc("Automatically sync notes to Mengram when you save them.").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoSync).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Auto-sync on save").setDesc("Sync notes automatically when you save them.").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoSync).onChange(async (value) => {
       this.plugin.settings.autoSync = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Sync folders").setDesc("Only sync notes in these folders (comma-separated). Leave empty to sync all.").addText((text) => text.setPlaceholder("notes,projects,journal").setValue(this.plugin.settings.syncFolders).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Sync folders").setDesc("Only sync notes in these folders (comma-separated). Leave empty to sync all.").addText((text) => text.setPlaceholder("Notes, projects, journal").setValue(this.plugin.settings.syncFolders).onChange(async (value) => {
       this.plugin.settings.syncFolders = value;
       await this.plugin.saveSettings();
     }));
@@ -181,7 +180,7 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.debounceMs = value * 1e3;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("User ID").setDesc("Isolate memories per user (for multi-user setups).").addText((text) => text.setPlaceholder("default").setValue(this.plugin.settings.userId).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("User ID").setDesc("Isolate memories per user (for multi-user setups).").addText((text) => text.setPlaceholder("Default").setValue(this.plugin.settings.userId).onChange(async (value) => {
       this.plugin.settings.userId = value.trim() || "default";
       await this.plugin.saveSettings();
     }));
