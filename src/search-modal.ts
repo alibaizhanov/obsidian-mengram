@@ -1,4 +1,4 @@
-import { App, Modal, MarkdownView, Notice } from 'obsidian';
+import { App, Modal, MarkdownView, normalizePath } from 'obsidian';
 import { MengramClient, SearchResult } from './mengram-client';
 
 export class MengramSearchModal extends Modal {
@@ -152,7 +152,7 @@ export class MengramSearchModal extends Modal {
             lines.push(`- ${fact}`);
         }
 
-        const fileName = `${result.entity.replace(/[\\/:*?"<>|]/g, '_')}.md`;
+        const fileName = normalizePath(`${result.entity.replace(/[\\/:*?"<>|]/g, '_')}.md`);
         try {
             const file = await this.app.vault.create(fileName, lines.join('\n'));
             await this.app.workspace.openLinkText(file.path, '', true);

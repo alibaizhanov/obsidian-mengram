@@ -34,7 +34,7 @@ export class MengramSettingTab extends PluginSettingTab {
         containerEl.empty();
 
         new Setting(containerEl)
-            .setName('Mengram settings')
+            .setName('Mengram')
             .setHeading();
 
         new Setting(containerEl)

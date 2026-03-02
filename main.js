@@ -154,7 +154,7 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian2.Setting(containerEl).setName("Mengram settings").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Mengram").setHeading();
     new import_obsidian2.Setting(containerEl).setName("API key").setDesc("Your Mengram API key (starts with om-). Get one at mengram.io/dashboard.").addText((text) => {
       text.setPlaceholder("om-...");
       text.setValue(this.plugin.settings.apiKey);
@@ -504,7 +504,7 @@ var MengramSearchModal = class extends import_obsidian4.Modal {
     for (const fact of result.facts) {
       lines.push(`- ${fact}`);
     }
-    const fileName = `${result.entity.replace(/[\\/:*?"<>|]/g, "_")}.md`;
+    const fileName = (0, import_obsidian4.normalizePath)(`${result.entity.replace(/[\\/:*?"<>|]/g, "_")}.md`);
     try {
       const file = await this.app.vault.create(fileName, lines.join("\n"));
       await this.app.workspace.openLinkText(file.path, "", true);

@@ -13,7 +13,7 @@ Sync your Obsidian notes to [Mengram](https://mengram.io) AI memory. Your notes 
 
 ## Setup
 
-1. Get an API key at [mengram.io/dashboard](https://mengram.io/dashboard)
+1. Get a free API key at [mengram.io/dashboard](https://mengram.io/dashboard)
 2. Install the plugin (see below)
 3. Open Settings → Mengram → paste your API key
 4. Start writing notes — they sync automatically
@@ -22,7 +22,7 @@ Sync your Obsidian notes to [Mengram](https://mengram.io) AI memory. Your notes 
 
 ### Manual
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/alibaizhanov/mengram/releases)
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/alibaizhanov/obsidian-mengram/releases)
 2. Create folder: `<your-vault>/.obsidian/plugins/mengram/`
 3. Copy the 3 files into that folder
 4. Restart Obsidian → Settings → Community Plugins → Enable "Mengram"
@@ -40,10 +40,10 @@ Sync your Obsidian notes to [Mengram](https://mengram.io) AI memory. Your notes 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| API Key | — | Your Mengram API key (om-...) |
+| API key | — | Your Mengram API key (om-...) |
 | Auto-sync | On | Sync notes automatically when saved |
 | Sync folders | (all) | Only sync these folders (comma-separated) |
-| Excluded folders | .obsidian,.trash | Never sync these folders |
+| Excluded folders | .trash | Never sync these folders |
 | Debounce delay | 2s | Wait before syncing after edit |
 | User ID | default | For multi-user isolation |
 | Base URL | mengram.io | For self-hosted instances |
@@ -62,7 +62,15 @@ Sync your Obsidian notes to [Mengram](https://mengram.io) AI memory. Your notes 
 
 ## Self-hosted
 
-If you're running Mengram locally, change the Base URL in settings to your instance (e.g., `http://localhost:8080`).
+If you're running Mengram locally, change the base URL in settings to your instance (e.g., `http://localhost:8080`).
+
+## Network usage
+
+This plugin sends note content to the Mengram API (`mengram.io`) for AI-powered knowledge extraction and storage. No data is sent without an API key configured. All communication uses HTTPS.
+
+## Pricing
+
+Mengram offers a free tier (100 adds/month, 500 searches/month). Paid plans are available at [mengram.io/#pricing](https://mengram.io/#pricing). An API key is required — sign up for free at [mengram.io/dashboard](https://mengram.io/dashboard).
 
 ## License
 
