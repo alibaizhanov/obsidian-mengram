@@ -1,9 +1,9 @@
 {
     "id": "mengram",
     "name": "Mengram",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "minAppVersion": "1.0.0",
-    "description": "Sync your notes to Mengram AI memory. Auto-sync on save, search across all your memories.",
+    "description": "Turn your vault into memory your AI assistants can read. Notes sync as you write and become searchable context in Claude, Cursor, and any MCP client.",
     "author": "Ali Baizhanov",
     "authorUrl": "https://mengram.io",
     "isDesktopOnly": false

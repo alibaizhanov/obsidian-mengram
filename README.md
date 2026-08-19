@@ -1,6 +1,8 @@
 # Mengram for Obsidian
 
-Sync your Obsidian notes to [Mengram](https://mengram.io) AI memory. Your notes become searchable knowledge that any AI tool can access via MCP, SDK, or API.
+Your vault already holds what you know. This plugin makes it something your AI assistants can actually read.
+
+Notes sync to [Mengram](https://mengram.io) as you write, where they are turned into searchable memory — entities, facts and the relationships between them. Ask Claude, Cursor or any MCP client a question, and it answers from your own notes instead of guessing.
 
 ## Features
 
