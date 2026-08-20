@@ -177,16 +177,24 @@ export default class MengramPlugin extends Plugin {
             return;
         }
 
-        // Paced to stay under the account's per-minute limit, so a large vault
-        // takes minutes. Say so up front — a silent hour reads as a hang.
-        new Notice(this.syncEngine.describeVaultSync(), 8000);
+        // One notice for the whole run, rewritten in place. A vault sync is
+        // paced against the account's rate limit and can take half an hour, so
+        // a toast that vanishes after a few seconds leaves the rest of it
+        // looking like nothing is happening.
+        const notice = new Notice(this.syncEngine.describeVaultSync(), 0);
 
-        const result = await this.syncEngine.syncVault();
-
-        new Notice(
-            `Mengram: vault sync complete. ` +
-            `Synced: ${result.synced}, skipped: ${result.skipped}, errors: ${result.errors}`
+        const result = await this.syncEngine.syncVault(
+            progress => notice.setMessage(progress)
         );
+
+        const parts = [`${result.synced} synced`];
+        if (result.skipped) parts.push(`${result.skipped} unchanged`);
+        if (result.errors) parts.push(`${result.errors} failed`);
+        notice.setMessage(
+            `Mengram: done — ${parts.join(', ')}.` +
+            (result.errors ? ' See the developer console for what failed.' : '')
+        );
+        window.setTimeout(() => notice.hide(), result.errors ? 15000 : 6000);
     }
 
     private async showStats(): Promise<void> {

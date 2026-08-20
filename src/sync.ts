@@ -186,7 +186,24 @@ export class SyncEngine {
         return `Mengram: syncing ${count} note${count === 1 ? '' : 's'}${eta}. Paced to stay within your plan's rate limit.`;
     }
 
-    async syncVault(): Promise<{ synced: number; skipped: number; errors: number }> {
+    /** The line shown while a vault sync runs. Counts first, then a remaining
+     *  estimate once enough notes have gone through for the average to mean
+     *  anything — an ETA off the first note is noise. */
+    private progressLine(index: number, total: number, synced: number,
+                         errors: number, startedAt: number): string {
+        let line = `Mengram: syncing ${index + 1} of ${total}`;
+        if (errors) line += ` · ${errors} failed`;
+        if (index >= 3) {
+            const perNote = (Date.now() - startedAt) / index;
+            const left = Math.round((perNote * (total - index)) / 60_000);
+            if (left >= 1) line += ` · ~${left} min left`;
+        }
+        return line;
+    }
+
+    async syncVault(
+        onProgress?: (line: string) => void,
+    ): Promise<{ synced: number; skipped: number; errors: number }> {
         if (!this.client) {
             new Notice('Mengram: no API key configured');
             return { synced: 0, skipped: 0, errors: 0 };
@@ -198,9 +215,11 @@ export class SyncEngine {
         let skipped = 0;
         let errors = 0;
 
+        const startedAt = Date.now();
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             this.statusCallback(`syncing ${i + 1}/${total}`);
+            onProgress?.(this.progressLine(i, total, synced, errors, startedAt));
 
             try {
                 const content = await this.vault.cachedRead(file);

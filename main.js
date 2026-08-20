@@ -377,7 +377,22 @@ ${content}`;
     const eta = minutes >= 1 ? `, about ${minutes} min` : "";
     return `Mengram: syncing ${count} note${count === 1 ? "" : "s"}${eta}. Paced to stay within your plan's rate limit.`;
   }
-  async syncVault() {
+  /** The line shown while a vault sync runs. Counts first, then a remaining
+   *  estimate once enough notes have gone through for the average to mean
+   *  anything — an ETA off the first note is noise. */
+  progressLine(index, total, synced, errors, startedAt) {
+    let line = `Mengram: syncing ${index + 1} of ${total}`;
+    if (errors)
+      line += ` \xB7 ${errors} failed`;
+    if (index >= 3) {
+      const perNote = (Date.now() - startedAt) / index;
+      const left = Math.round(perNote * (total - index) / 6e4);
+      if (left >= 1)
+        line += ` \xB7 ~${left} min left`;
+    }
+    return line;
+  }
+  async syncVault(onProgress) {
     if (!this.client) {
       new import_obsidian3.Notice("Mengram: no API key configured");
       return { synced: 0, skipped: 0, errors: 0 };
@@ -387,9 +402,11 @@ ${content}`;
     let synced = 0;
     let skipped = 0;
     let errors = 0;
+    const startedAt = Date.now();
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       this.statusCallback(`syncing ${i + 1}/${total}`);
+      onProgress == null ? void 0 : onProgress(this.progressLine(i, total, synced, errors, startedAt));
       try {
         const content = await this.vault.cachedRead(file);
         if (!content || content.trim().length === 0) {
@@ -724,11 +741,19 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
       new import_obsidian5.Notice("Mengram: please configure your API key in settings");
       return;
     }
-    new import_obsidian5.Notice(this.syncEngine.describeVaultSync(), 8e3);
-    const result = await this.syncEngine.syncVault();
-    new import_obsidian5.Notice(
-      `Mengram: vault sync complete. Synced: ${result.synced}, skipped: ${result.skipped}, errors: ${result.errors}`
+    const notice = new import_obsidian5.Notice(this.syncEngine.describeVaultSync(), 0);
+    const result = await this.syncEngine.syncVault(
+      (progress) => notice.setMessage(progress)
     );
+    const parts = [`${result.synced} synced`];
+    if (result.skipped)
+      parts.push(`${result.skipped} unchanged`);
+    if (result.errors)
+      parts.push(`${result.errors} failed`);
+    notice.setMessage(
+      `Mengram: done \u2014 ${parts.join(", ")}.` + (result.errors ? " See the developer console for what failed." : "")
+    );
+    window.setTimeout(() => notice.hide(), result.errors ? 15e3 : 6e3);
   }
   async showStats() {
     if (!this.client) {
