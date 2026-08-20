@@ -50,11 +50,41 @@ export class MengramClient {
     private baseUrl: string;
     private timeout: number;
 
+    /** Requests per minute this key is allowed, as last reported by the server
+     *  (X-RateLimit-Limit). Null until a response has been seen. Bulk callers
+     *  read this to pace themselves instead of guessing. */
+    rateLimitPerMin: number | null = null;
+
+    /** Longest a 429 will be honoured for. The server currently asks for 60s;
+     *  the cap stops a misconfigured Retry-After from hanging a vault sync. */
+    private static readonly MAX_RETRY_AFTER_MS = 90_000;
+
     constructor(apiKey: string, options: { baseUrl?: string; timeout?: number } = {}) {
         if (!apiKey) throw new Error('API key is required');
         this.apiKey = apiKey;
         this.baseUrl = (options.baseUrl || 'https://mengram.io').replace(/\/$/, '');
         this.timeout = options.timeout || 30000;
+    }
+
+    /** Header lookup that does not care about casing — Obsidian's requestUrl
+     *  lowercases them, other runtimes do not. */
+    private static header(headers: Record<string, string> | undefined, name: string): string | undefined {
+        if (!headers) return undefined;
+        const wanted = name.toLowerCase();
+        for (const key of Object.keys(headers)) {
+            if (key.toLowerCase() === wanted) return headers[key];
+        }
+        return undefined;
+    }
+
+    /** How long to wait after a 429, from Retry-After when the server sends it.
+     *  The old backoff of one second could never clear a per-minute limit: all
+     *  three attempts landed inside the same blocked window. */
+    private static retryAfterMs(headers: Record<string, string> | undefined): number {
+        const raw = MengramClient.header(headers, 'retry-after');
+        const seconds = raw ? Number(raw) : NaN;
+        const ms = Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 60_000;
+        return Math.min(ms, MengramClient.MAX_RETRY_AFTER_MS);
     }
 
     private async _request(method: string, path: string, body?: Record<string, unknown>, params?: Record<string, string>): Promise<ApiResponse> {
@@ -82,11 +112,17 @@ export class MengramClient {
                     body: body ? JSON.stringify(body) : undefined,
                     throw: false,
                 });
+                const limit = Number(MengramClient.header(response.headers, 'x-ratelimit-limit'));
+                if (Number.isFinite(limit) && limit > 0) this.rateLimitPerMin = limit;
+
                 const data = response.json as ApiResponse;
                 if (response.status >= 400) {
                     if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
                         lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
-                        await new Promise(r => window.setTimeout(r, 1000 * (attempt + 1)));
+                        const wait = response.status === 429
+                            ? MengramClient.retryAfterMs(response.headers)
+                            : 1000 * (attempt + 1);
+                        await new Promise(r => window.setTimeout(r, wait));
                         continue;
                     }
                     throw new MengramError(data.detail || `HTTP ${response.status}`, response.status);

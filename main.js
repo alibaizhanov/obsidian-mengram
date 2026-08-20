@@ -38,13 +38,38 @@ var MengramError = class extends Error {
     this.statusCode = statusCode;
   }
 };
-var MengramClient = class {
+var _MengramClient = class {
   constructor(apiKey, options = {}) {
+    /** Requests per minute this key is allowed, as last reported by the server
+     *  (X-RateLimit-Limit). Null until a response has been seen. Bulk callers
+     *  read this to pace themselves instead of guessing. */
+    this.rateLimitPerMin = null;
     if (!apiKey)
       throw new Error("API key is required");
     this.apiKey = apiKey;
     this.baseUrl = (options.baseUrl || "https://mengram.io").replace(/\/$/, "");
     this.timeout = options.timeout || 3e4;
+  }
+  /** Header lookup that does not care about casing — Obsidian's requestUrl
+   *  lowercases them, other runtimes do not. */
+  static header(headers, name) {
+    if (!headers)
+      return void 0;
+    const wanted = name.toLowerCase();
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === wanted)
+        return headers[key];
+    }
+    return void 0;
+  }
+  /** How long to wait after a 429, from Retry-After when the server sends it.
+   *  The old backoff of one second could never clear a per-minute limit: all
+   *  three attempts landed inside the same blocked window. */
+  static retryAfterMs(headers) {
+    const raw = _MengramClient.header(headers, "retry-after");
+    const seconds = raw ? Number(raw) : NaN;
+    const ms = Number.isFinite(seconds) && seconds > 0 ? seconds * 1e3 : 6e4;
+    return Math.min(ms, _MengramClient.MAX_RETRY_AFTER_MS);
   }
   async _request(method, path, body, params) {
     let url = `${this.baseUrl}${path}`;
@@ -67,11 +92,15 @@ var MengramClient = class {
           body: body ? JSON.stringify(body) : void 0,
           throw: false
         });
+        const limit = Number(_MengramClient.header(response.headers, "x-ratelimit-limit"));
+        if (Number.isFinite(limit) && limit > 0)
+          this.rateLimitPerMin = limit;
         const data = response.json;
         if (response.status >= 400) {
           if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
             lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
-            await new Promise((r) => window.setTimeout(r, 1e3 * (attempt + 1)));
+            const wait = response.status === 429 ? _MengramClient.retryAfterMs(response.headers) : 1e3 * (attempt + 1);
+            await new Promise((r) => window.setTimeout(r, wait));
             continue;
           }
           throw new MengramError(data.detail || `HTTP ${response.status}`, response.status);
@@ -134,6 +163,10 @@ var MengramClient = class {
     throw new MengramError("Job timed out", 408);
   }
 };
+var MengramClient = _MengramClient;
+/** Longest a 429 will be honoured for. The server currently asks for 60s;
+ *  the cap stops a misconfigured Retry-After from hanging a vault sync. */
+MengramClient.MAX_RETRY_AFTER_MS = 9e4;
 
 // src/settings.ts
 var import_obsidian2 = require("obsidian");
@@ -322,6 +355,28 @@ ${content}`;
       return false;
     }
   }
+  /** Gap to leave between bulk requests so the account's per-minute limit is
+   *  never reached. A vault sync used to fire five a second against a limit
+   *  of twenty a minute, so everything past the first twenty notes failed —
+   *  which is what a new user's first sync looks like.
+   *
+   *  The server reports the limit in X-RateLimit-Limit; until a response has
+   *  been seen we assume the smallest plan. The extra 10% keeps us clear of
+   *  the window boundary. */
+  pacingMs() {
+    var _a, _b;
+    const perMin = (_b = (_a = this.client) == null ? void 0 : _a.rateLimitPerMin) != null ? _b : 20;
+    return Math.ceil(6e4 / Math.max(perMin, 1) * 1.1);
+  }
+  /** What the user is about to sit through, in words. */
+  describeVaultSync() {
+    const count = this.vault.getMarkdownFiles().filter((f) => this.shouldSync(f)).length;
+    if (count === 0)
+      return "Mengram: nothing to sync.";
+    const minutes = Math.round(count * this.pacingMs() / 6e4);
+    const eta = minutes >= 1 ? `, about ${minutes} min` : "";
+    return `Mengram: syncing ${count} note${count === 1 ? "" : "s"}${eta}. Paced to stay within your plan's rate limit.`;
+  }
   async syncVault() {
     if (!this.client) {
       new import_obsidian3.Notice("Mengram: no API key configured");
@@ -355,7 +410,7 @@ ${content}`;
         if (synced % 10 === 0) {
           await this.saveState();
         }
-        await new Promise((r) => window.setTimeout(r, 200));
+        await new Promise((r) => window.setTimeout(r, this.pacingMs()));
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         console.error(`Mengram: failed to sync ${file.path}:`, error);
@@ -669,7 +724,7 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
       new import_obsidian5.Notice("Mengram: please configure your API key in settings");
       return;
     }
-    new import_obsidian5.Notice("Mengram: starting vault sync...");
+    new import_obsidian5.Notice(this.syncEngine.describeVaultSync(), 8e3);
     const result = await this.syncEngine.syncVault();
     new import_obsidian5.Notice(
       `Mengram: vault sync complete. Synced: ${result.synced}, skipped: ${result.skipped}, errors: ${result.errors}`

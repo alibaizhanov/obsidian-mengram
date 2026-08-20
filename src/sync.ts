@@ -164,6 +164,28 @@ export class SyncEngine {
         }
     }
 
+    /** Gap to leave between bulk requests so the account's per-minute limit is
+     *  never reached. A vault sync used to fire five a second against a limit
+     *  of twenty a minute, so everything past the first twenty notes failed —
+     *  which is what a new user's first sync looks like.
+     *
+     *  The server reports the limit in X-RateLimit-Limit; until a response has
+     *  been seen we assume the smallest plan. The extra 10% keeps us clear of
+     *  the window boundary. */
+    private pacingMs(): number {
+        const perMin = this.client?.rateLimitPerMin ?? 20;
+        return Math.ceil((60_000 / Math.max(perMin, 1)) * 1.1);
+    }
+
+    /** What the user is about to sit through, in words. */
+    describeVaultSync(): string {
+        const count = this.vault.getMarkdownFiles().filter(f => this.shouldSync(f)).length;
+        if (count === 0) return 'Mengram: nothing to sync.';
+        const minutes = Math.round((count * this.pacingMs()) / 60_000);
+        const eta = minutes >= 1 ? `, about ${minutes} min` : '';
+        return `Mengram: syncing ${count} note${count === 1 ? '' : 's'}${eta}. Paced to stay within your plan's rate limit.`;
+    }
+
     async syncVault(): Promise<{ synced: number; skipped: number; errors: number }> {
         if (!this.client) {
             new Notice('Mengram: no API key configured');
@@ -202,7 +224,7 @@ export class SyncEngine {
                     await this.saveState();
                 }
 
-                await new Promise(r => window.setTimeout(r, 200));
+                await new Promise(r => window.setTimeout(r, this.pacingMs()));
             } catch (err: unknown) {
                 const error = err instanceof Error ? err : new Error(String(err));
                 console.error(`Mengram: failed to sync ${file.path}:`, error);

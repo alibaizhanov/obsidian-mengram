@@ -177,7 +177,9 @@ export default class MengramPlugin extends Plugin {
             return;
         }
 
-        new Notice('Mengram: starting vault sync...');
+        // Paced to stay under the account's per-minute limit, so a large vault
+        // takes minutes. Say so up front — a silent hour reads as a hang.
+        new Notice(this.syncEngine.describeVaultSync(), 8000);
 
         const result = await this.syncEngine.syncVault();
 
