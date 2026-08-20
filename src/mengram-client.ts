@@ -166,6 +166,20 @@ export class MengramClient {
         return data.results || [];
     }
 
+    /** The memory as ready-to-write files, keyed by path.
+     *
+     *  The server serialises, so what lands in a vault is byte-identical to
+     *  the zip `mengram export` produces. Building the Markdown here instead
+     *  would be a second implementation waiting to disagree with the first. */
+    async exportFiles(options: { userId?: string } = {}): Promise<Record<string, string>> {
+        const params: Record<string, string> = { format: 'files' };
+        if (options.userId && options.userId !== 'default') {
+            params.sub_user_id = options.userId;
+        }
+        const data = await this._request('GET', '/v1/export', undefined, params);
+        return (data.files as Record<string, string>) || {};
+    }
+
     async stats(options: { userId?: string } = {}): Promise<StatsResult> {
         const params: Record<string, string> = {};
         if (options.userId && options.userId !== 'default') {

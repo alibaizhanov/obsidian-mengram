@@ -9,6 +9,12 @@ export interface MengramSettings {
     debounceMs: number;
     userId: string;
     baseUrl: string;
+    /** Vault folder the memory is written into. Generated: anything you edit
+     *  in here is replaced on the next pull. */
+    pullFolder: string;
+    /** Minutes between automatic pulls. 0 turns them off and leaves the
+     *  command as the only way to refresh. */
+    pullIntervalMin: number;
 }
 
 export const DEFAULT_SETTINGS: MengramSettings = {
@@ -19,6 +25,8 @@ export const DEFAULT_SETTINGS: MengramSettings = {
     debounceMs: 2000,
     userId: 'default',
     baseUrl: 'https://mengram.io',
+    pullFolder: 'Mengram',
+    pullIntervalMin: 0,
 };
 
 export class MengramSettingTab extends PluginSettingTab {
@@ -112,6 +120,39 @@ export class MengramSettingTab extends PluginSettingTab {
                     this.plugin.settings.baseUrl = value.trim() || 'https://mengram.io';
                     await this.plugin.saveSettings();
                     this.plugin.reinitClient();
+                }));
+
+        containerEl.createEl('h3', { text: 'Memory in your vault' });
+        containerEl.createEl('p', {
+            text: 'Pull writes your memory into the vault as Markdown — a file per '
+                + 'entity, relations as links, so the graph view works on it. That '
+                + 'folder is generated: edits inside it are replaced on the next '
+                + 'pull. Edit your own notes instead; those sync the other way.',
+            cls: 'setting-item-description',
+        });
+
+        new Setting(containerEl)
+            .setName('Memory folder')
+            .setDesc('Where pulled memory is written. Generated — do not keep your own notes here.')
+            .addText(text => text
+                .setPlaceholder('Mengram')
+                .setValue(this.plugin.settings.pullFolder)
+                .onChange(async (value) => {
+                    this.plugin.settings.pullFolder = value.trim() || 'Mengram';
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
+            .setName('Pull automatically')
+            .setDesc('Minutes between background pulls. 0 keeps it manual — run "Pull memory into vault" when you want it.')
+            .addText(text => text
+                .setPlaceholder('0')
+                .setValue(String(this.plugin.settings.pullIntervalMin))
+                .onChange(async (value) => {
+                    const minutes = Number(value);
+                    this.plugin.settings.pullIntervalMin =
+                        Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : 0;
+                    await this.plugin.saveSettings();
                 }));
     }
 }

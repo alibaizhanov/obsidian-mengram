@@ -1,6 +1,6 @@
 {
     "name": "obsidian-mengram",
-    "version": "1.0.4",
+    "version": "1.1.0",
     "description": "Mengram AI memory plugin for Obsidian",
     "main": "main.js",
     "type": "module",

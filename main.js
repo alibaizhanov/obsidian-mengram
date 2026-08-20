@@ -27,7 +27,7 @@ __export(main_exports, {
   default: () => MengramPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/mengram-client.ts
 var import_obsidian = require("obsidian");
@@ -141,6 +141,19 @@ var _MengramClient = class {
     });
     return data.results || [];
   }
+  /** The memory as ready-to-write files, keyed by path.
+   *
+   *  The server serialises, so what lands in a vault is byte-identical to
+   *  the zip `mengram export` produces. Building the Markdown here instead
+   *  would be a second implementation waiting to disagree with the first. */
+  async exportFiles(options = {}) {
+    const params = { format: "files" };
+    if (options.userId && options.userId !== "default") {
+      params.sub_user_id = options.userId;
+    }
+    const data = await this._request("GET", "/v1/export", void 0, params);
+    return data.files || {};
+  }
   async stats(options = {}) {
     const params = {};
     if (options.userId && options.userId !== "default") {
@@ -177,7 +190,9 @@ var DEFAULT_SETTINGS = {
   excludedFolders: ".trash",
   debounceMs: 2e3,
   userId: "default",
-  baseUrl: "https://mengram.io"
+  baseUrl: "https://mengram.io",
+  pullFolder: "Mengram",
+  pullIntervalMin: 0
 };
 var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
@@ -221,6 +236,20 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.baseUrl = value.trim() || "https://mengram.io";
       await this.plugin.saveSettings();
       this.plugin.reinitClient();
+    }));
+    containerEl.createEl("h3", { text: "Memory in your vault" });
+    containerEl.createEl("p", {
+      text: "Pull writes your memory into the vault as Markdown \u2014 a file per entity, relations as links, so the graph view works on it. That folder is generated: edits inside it are replaced on the next pull. Edit your own notes instead; those sync the other way.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian2.Setting(containerEl).setName("Memory folder").setDesc("Where pulled memory is written. Generated \u2014 do not keep your own notes here.").addText((text) => text.setPlaceholder("Mengram").setValue(this.plugin.settings.pullFolder).onChange(async (value) => {
+      this.plugin.settings.pullFolder = value.trim() || "Mengram";
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian2.Setting(containerEl).setName("Pull automatically").setDesc('Minutes between background pulls. 0 keeps it manual \u2014 run "Pull memory into vault" when you want it.').addText((text) => text.setPlaceholder("0").setValue(String(this.plugin.settings.pullIntervalMin)).onChange(async (value) => {
+      const minutes = Number(value);
+      this.plugin.settings.pullIntervalMin = Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : 0;
+      await this.plugin.saveSettings();
     }));
   }
 };
@@ -448,9 +477,99 @@ ${content}`;
   }
 };
 
-// src/search-modal.ts
+// src/pull.ts
 var import_obsidian4 = require("obsidian");
-var MengramSearchModal = class extends import_obsidian4.Modal {
+var SERVER_ROOT = "Mengram/";
+var PullEngine = class {
+  constructor(vault, settings) {
+    this.client = null;
+    this.vault = vault;
+    this.settings = settings;
+  }
+  setClient(client) {
+    this.client = client;
+  }
+  updateSettings(settings) {
+    this.settings = settings;
+  }
+  get root() {
+    return (0, import_obsidian4.normalizePath)((this.settings.pullFolder || "Mengram").replace(/^\/+|\/+$/g, ""));
+  }
+  localPath(serverPath) {
+    const tail = serverPath.startsWith(SERVER_ROOT) ? serverPath.slice(SERVER_ROOT.length) : serverPath;
+    return (0, import_obsidian4.normalizePath)(`${this.root}/${tail}`);
+  }
+  /** Create every folder on the way to a file. The vault API will not do it
+   *  for us, and a missing parent is the usual reason a write fails. */
+  async ensureParent(path) {
+    const parts = path.split("/");
+    parts.pop();
+    let sofar = "";
+    for (const part of parts) {
+      sofar = sofar ? `${sofar}/${part}` : part;
+      if (!await this.vault.adapter.exists(sofar)) {
+        await this.vault.adapter.mkdir(sofar);
+      }
+    }
+  }
+  /** Files currently under the pull folder, so ones the memory no longer has
+   *  can be cleared out rather than left behind as ghosts. */
+  async existingFiles() {
+    const found = [];
+    const walk = async (dir) => {
+      if (!await this.vault.adapter.exists(dir))
+        return;
+      const listing = await this.vault.adapter.list(dir);
+      for (const file of listing.files) {
+        if (file.endsWith(".md"))
+          found.push(file);
+      }
+      for (const sub of listing.folders)
+        await walk(sub);
+    };
+    await walk(this.root);
+    return found;
+  }
+  async pull(onProgress) {
+    if (!this.client)
+      throw new Error("no API key configured");
+    onProgress == null ? void 0 : onProgress("Mengram: fetching memory\u2026");
+    const tree = await this.client.exportFiles({ userId: this.settings.userId });
+    const wanted = /* @__PURE__ */ new Map();
+    for (const [serverPath, text] of Object.entries(tree)) {
+      wanted.set(this.localPath(serverPath), text);
+    }
+    const before = await this.existingFiles();
+    let written = 0;
+    let unchanged = 0;
+    let done = 0;
+    for (const [path, text] of wanted) {
+      const exists = await this.vault.adapter.exists(path);
+      if (exists && await this.vault.adapter.read(path) === text) {
+        unchanged++;
+      } else {
+        await this.ensureParent(path);
+        await this.vault.adapter.write(path, text);
+        written++;
+      }
+      done++;
+      if (done % 10 === 0)
+        onProgress == null ? void 0 : onProgress(`Mengram: pulling ${done} of ${wanted.size}`);
+    }
+    let removed = 0;
+    for (const path of before) {
+      if (!wanted.has(path)) {
+        await this.vault.adapter.remove(path);
+        removed++;
+      }
+    }
+    return { written, unchanged, removed };
+  }
+};
+
+// src/search-modal.ts
+var import_obsidian5 = require("obsidian");
+var MengramSearchModal = class extends import_obsidian5.Modal {
   constructor(app, client, userId) {
     super(app);
     this.searchTimeout = null;
@@ -544,7 +663,7 @@ var MengramSearchModal = class extends import_obsidian4.Modal {
     card.setAttribute("title", "Click to insert into current note");
   }
   insertResult(result) {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!activeView) {
       void this.createNoteFromResult(result);
       return;
@@ -575,7 +694,7 @@ var MengramSearchModal = class extends import_obsidian4.Modal {
     for (const fact of result.facts) {
       lines.push(`- ${fact}`);
     }
-    const fileName = (0, import_obsidian4.normalizePath)(`${result.entity.replace(/[\\/:*?"<>|]/g, "_")}.md`);
+    const fileName = (0, import_obsidian5.normalizePath)(`${result.entity.replace(/[\\/:*?"<>|]/g, "_")}.md`);
     try {
       const file = await this.app.vault.create(fileName, lines.join("\n"));
       await this.app.workspace.openLinkText(file.path, "", true);
@@ -593,10 +712,11 @@ var MengramSearchModal = class extends import_obsidian4.Modal {
 };
 
 // src/main.ts
-var MengramPlugin = class extends import_obsidian5.Plugin {
+var MengramPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
+    this.pullTimer = null;
     this.client = null;
     this.syncState = { fileHashes: {} };
   }
@@ -616,23 +736,26 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
       (status) => this.updateStatus(status),
       () => this.savePluginData()
     );
+    this.pullEngine = new PullEngine(this.app.vault, this.settings);
+    this.pullEngine.setClient(this.client);
+    this.schedulePull();
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
-        if (file instanceof import_obsidian5.TFile) {
+        if (file instanceof import_obsidian6.TFile) {
           this.syncEngine.onFileModified(file);
         }
       })
     );
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
-        if (file instanceof import_obsidian5.TFile) {
+        if (file instanceof import_obsidian6.TFile) {
           delete this.syncState.fileHashes[file.path];
         }
       })
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
-        if (file instanceof import_obsidian5.TFile && this.syncState.fileHashes[oldPath]) {
+        if (file instanceof import_obsidian6.TFile && this.syncState.fileHashes[oldPath]) {
           this.syncState.fileHashes[file.path] = this.syncState.fileHashes[oldPath];
           delete this.syncState.fileHashes[oldPath];
         }
@@ -643,7 +766,7 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
       name: "Search memories",
       callback: () => {
         if (!this.client) {
-          new import_obsidian5.Notice("Mengram: please configure your API key in settings");
+          new import_obsidian6.Notice("Mengram: please configure your API key in settings");
           return;
         }
         new MengramSearchModal(
@@ -673,6 +796,11 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
       callback: () => void this.syncVault()
     });
     this.addCommand({
+      id: "pull-memory",
+      name: "Pull memory into vault",
+      callback: () => void this.pullMemory()
+    });
+    this.addCommand({
       id: "show-stats",
       name: "Show memory stats",
       callback: () => void this.showStats()
@@ -682,9 +810,11 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
   onunload() {
     var _a;
     (_a = this.syncEngine) == null ? void 0 : _a.destroy();
+    if (this.pullTimer !== null)
+      window.clearInterval(this.pullTimer);
   }
   reinitClient() {
-    var _a;
+    var _a, _b;
     if (this.settings.apiKey) {
       this.client = new MengramClient(this.settings.apiKey, {
         baseUrl: this.settings.baseUrl
@@ -693,10 +823,13 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
       this.client = null;
     }
     (_a = this.syncEngine) == null ? void 0 : _a.reinitClient();
+    (_b = this.pullEngine) == null ? void 0 : _b.setClient(this.client);
   }
   async saveSettings() {
-    var _a;
+    var _a, _b;
     (_a = this.syncEngine) == null ? void 0 : _a.updateSettings(this.settings);
+    (_b = this.pullEngine) == null ? void 0 : _b.updateSettings(this.settings);
+    this.schedulePull();
     await this.savePluginData();
   }
   async savePluginData() {
@@ -727,21 +860,21 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
   }
   async syncCurrentFile(file) {
     if (!this.client) {
-      new import_obsidian5.Notice("Mengram: please configure your API key in settings");
+      new import_obsidian6.Notice("Mengram: please configure your API key in settings");
       return;
     }
-    new import_obsidian5.Notice(`Mengram: syncing ${file.basename}...`);
+    new import_obsidian6.Notice(`Mengram: syncing ${file.basename}...`);
     const success = await this.syncEngine.syncFile(file);
     if (success) {
-      new import_obsidian5.Notice(`Mengram: ${file.basename} synced`);
+      new import_obsidian6.Notice(`Mengram: ${file.basename} synced`);
     }
   }
   async syncVault() {
     if (!this.client) {
-      new import_obsidian5.Notice("Mengram: please configure your API key in settings");
+      new import_obsidian6.Notice("Mengram: please configure your API key in settings");
       return;
     }
-    const notice = new import_obsidian5.Notice(this.syncEngine.describeVaultSync(), 0);
+    const notice = new import_obsidian6.Notice(this.syncEngine.describeVaultSync(), 0);
     const result = await this.syncEngine.syncVault(
       (progress) => notice.setMessage(progress)
     );
@@ -755,14 +888,68 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
     );
     window.setTimeout(() => notice.hide(), result.errors ? 15e3 : 6e3);
   }
+  /** Re-arms the background pull. Called on load and whenever settings change,
+   *  so switching the interval takes effect without a restart. */
+  schedulePull() {
+    if (this.pullTimer !== null) {
+      window.clearInterval(this.pullTimer);
+      this.pullTimer = null;
+    }
+    const minutes = this.settings.pullIntervalMin;
+    if (!minutes || minutes <= 0)
+      return;
+    this.pullTimer = window.setInterval(
+      () => void this.pullMemory({ quiet: true }),
+      minutes * 6e4
+    );
+    this.registerInterval(this.pullTimer);
+  }
+  /** Bring memory into the vault as files.
+   *
+   *  `quiet` is for the background run: it should say nothing unless
+   *  something actually changed or broke. A notification every ten minutes
+   *  reporting that nothing happened is how people turn a feature off. */
+  async pullMemory(options = {}) {
+    if (!this.client) {
+      if (!options.quiet) {
+        new import_obsidian6.Notice("Mengram: please configure your API key in settings");
+      }
+      return;
+    }
+    const notice = options.quiet ? null : new import_obsidian6.Notice("Mengram: pulling memory\u2026", 0);
+    try {
+      const result = await this.pullEngine.pull(
+        (line) => notice == null ? void 0 : notice.setMessage(line)
+      );
+      const changed = result.written + result.removed;
+      if (options.quiet) {
+        if (changed) {
+          new import_obsidian6.Notice(`Mengram: pulled ${result.written} updated, ${result.removed} removed`);
+        }
+        return;
+      }
+      const parts = [`${result.written} written`];
+      if (result.unchanged)
+        parts.push(`${result.unchanged} already current`);
+      if (result.removed)
+        parts.push(`${result.removed} removed`);
+      notice == null ? void 0 : notice.setMessage(`Mengram: ${parts.join(", ")} in ${this.settings.pullFolder}/`);
+      window.setTimeout(() => notice == null ? void 0 : notice.hide(), 6e3);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error("Mengram: pull failed:", error);
+      notice == null ? void 0 : notice.hide();
+      new import_obsidian6.Notice(`Mengram: pull failed \u2014 ${error.message}`, 1e4);
+    }
+  }
   async showStats() {
     if (!this.client) {
-      new import_obsidian5.Notice("Mengram: please configure your API key in settings");
+      new import_obsidian6.Notice("Mengram: please configure your API key in settings");
       return;
     }
     try {
       const stats = await this.client.stats({ userId: this.settings.userId });
-      new import_obsidian5.Notice(
+      new import_obsidian6.Notice(
         `Mengram stats:
 Entities: ${stats.entities}
 Facts: ${stats.facts}
@@ -772,7 +959,7 @@ Relations: ${stats.relations}`,
       );
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      new import_obsidian5.Notice(`Mengram: failed to get stats: ${error.message}`);
+      new import_obsidian6.Notice(`Mengram: failed to get stats: ${error.message}`);
     }
   }
 };
