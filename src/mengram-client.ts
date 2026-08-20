@@ -86,7 +86,7 @@ export class MengramClient {
                 if (response.status >= 400) {
                     if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
                         lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
-                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                        await new Promise(r => window.setTimeout(r, 1000 * (attempt + 1)));
                         continue;
                     }
                     throw new MengramError(data.detail || `HTTP ${response.status}`, response.status);
@@ -97,14 +97,14 @@ export class MengramClient {
                 if (error instanceof MengramError) {
                     if ([429, 502, 503, 504].includes(error.statusCode) && attempt < 2) {
                         lastErr = error;
-                        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                        await new Promise(r => window.setTimeout(r, 1000 * (attempt + 1)));
                         continue;
                     }
                     throw error;
                 }
                 if (attempt < 2) {
                     lastErr = error;
-                    await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+                    await new Promise(r => window.setTimeout(r, 1000 * (attempt + 1)));
                     continue;
                 }
                 throw new MengramError(error.message, 0);
@@ -148,7 +148,7 @@ export class MengramClient {
             if (job.status === 'completed' || job.status === 'failed') {
                 return job;
             }
-            await new Promise(r => setTimeout(r, interval));
+            await new Promise(r => window.setTimeout(r, interval));
         }
         throw new MengramError('Job timed out', 408);
     }

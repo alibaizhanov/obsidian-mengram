@@ -6,7 +6,7 @@ export class MengramSearchModal extends Modal {
     private userId: string;
     private resultsEl!: HTMLElement;
     private inputEl!: HTMLInputElement;
-    private searchTimeout: ReturnType<typeof setTimeout> | null = null;
+    private searchTimeout: number | null = null;
 
     constructor(app: App, client: MengramClient, userId: string) {
         super(app);
@@ -38,7 +38,7 @@ export class MengramSearchModal extends Modal {
 
         this.inputEl.addEventListener('input', () => {
             if (this.searchTimeout) clearTimeout(this.searchTimeout);
-            this.searchTimeout = setTimeout(() => {
+            this.searchTimeout = window.setTimeout(() => {
                 const query = this.inputEl.value.trim();
                 if (query.length >= 3) {
                     void this.doSearch(query);

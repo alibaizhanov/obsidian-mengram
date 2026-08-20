@@ -131,7 +131,7 @@ export default class MengramPlugin extends Plugin {
         await this.saveData({
             settings: this.settings,
             syncState: this.syncState,
-        } as MengramPluginData);
+        });
     }
 
     private updateStatus(status: string): void {
@@ -150,7 +150,7 @@ export default class MengramPlugin extends Plugin {
         this.statusBarEl.setText(display[status] || `Mengram: ${status}`);
 
         if (status === 'synced') {
-            setTimeout(() => {
+            window.setTimeout(() => {
                 if (this.statusBarEl.getText() === 'Mengram: synced') {
                     this.statusBarEl.setText('Mengram: idle');
                 }

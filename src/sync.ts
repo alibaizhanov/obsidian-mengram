@@ -11,7 +11,7 @@ export class SyncEngine {
     private client: MengramClient | null = null;
     private settings: MengramSettings;
     private state: SyncState;
-    private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+    private debounceTimers: Map<string, number> = new Map();
     private queue: TFile[] = [];
     private processing = false;
     private statusCallback: (status: string) => void;
@@ -98,7 +98,7 @@ export class SyncEngine {
         const existing = this.debounceTimers.get(file.path);
         if (existing) clearTimeout(existing);
 
-        const timer = setTimeout(() => {
+        const timer = window.setTimeout(() => {
             this.debounceTimers.delete(file.path);
             this.enqueue(file);
         }, this.settings.debounceMs);
@@ -202,7 +202,7 @@ export class SyncEngine {
                     await this.saveState();
                 }
 
-                await new Promise(r => setTimeout(r, 200));
+                await new Promise(r => window.setTimeout(r, 200));
             } catch (err: unknown) {
                 const error = err instanceof Error ? err : new Error(String(err));
                 console.error(`Mengram: failed to sync ${file.path}:`, error);

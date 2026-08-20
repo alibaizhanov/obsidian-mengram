@@ -71,7 +71,7 @@ var MengramClient = class {
         if (response.status >= 400) {
           if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
             lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
-            await new Promise((r) => setTimeout(r, 1e3 * (attempt + 1)));
+            await new Promise((r) => window.setTimeout(r, 1e3 * (attempt + 1)));
             continue;
           }
           throw new MengramError(data.detail || `HTTP ${response.status}`, response.status);
@@ -82,14 +82,14 @@ var MengramClient = class {
         if (error instanceof MengramError) {
           if ([429, 502, 503, 504].includes(error.statusCode) && attempt < 2) {
             lastErr = error;
-            await new Promise((r) => setTimeout(r, 1e3 * (attempt + 1)));
+            await new Promise((r) => window.setTimeout(r, 1e3 * (attempt + 1)));
             continue;
           }
           throw error;
         }
         if (attempt < 2) {
           lastErr = error;
-          await new Promise((r) => setTimeout(r, 1e3 * (attempt + 1)));
+          await new Promise((r) => window.setTimeout(r, 1e3 * (attempt + 1)));
           continue;
         }
         throw new MengramError(error.message, 0);
@@ -129,7 +129,7 @@ var MengramClient = class {
       if (job.status === "completed" || job.status === "failed") {
         return job;
       }
-      await new Promise((r) => setTimeout(r, interval));
+      await new Promise((r) => window.setTimeout(r, interval));
     }
     throw new MengramError("Job timed out", 408);
   }
@@ -265,7 +265,7 @@ var SyncEngine = class {
     const existing = this.debounceTimers.get(file.path);
     if (existing)
       clearTimeout(existing);
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.debounceTimers.delete(file.path);
       this.enqueue(file);
     }, this.settings.debounceMs);
@@ -355,7 +355,7 @@ ${content}`;
         if (synced % 10 === 0) {
           await this.saveState();
         }
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => window.setTimeout(r, 200));
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
         console.error(`Mengram: failed to sync ${file.path}:`, error);
@@ -406,7 +406,7 @@ var MengramSearchModal = class extends import_obsidian4.Modal {
     this.inputEl.addEventListener("input", () => {
       if (this.searchTimeout)
         clearTimeout(this.searchTimeout);
-      this.searchTimeout = setTimeout(() => {
+      this.searchTimeout = window.setTimeout(() => {
         const query = this.inputEl.value.trim();
         if (query.length >= 3) {
           void this.doSearch(query);
@@ -646,7 +646,7 @@ var MengramPlugin = class extends import_obsidian5.Plugin {
     }
     this.statusBarEl.setText(display[status] || `Mengram: ${status}`);
     if (status === "synced") {
-      setTimeout(() => {
+      window.setTimeout(() => {
         if (this.statusBarEl.getText() === "Mengram: synced") {
           this.statusBarEl.setText("Mengram: idle");
         }
