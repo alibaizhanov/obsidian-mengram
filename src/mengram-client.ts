@@ -196,7 +196,7 @@ export class MengramClient {
         const files: Record<string, string> = {};
         const raw = data.files;
         if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-            for (const [path, text] of Object.entries(raw as Record<string, unknown>)) {
+            for (const [path, text] of Object.entries(raw)) {
                 if (typeof text === 'string') files[path] = text;
             }
         }
