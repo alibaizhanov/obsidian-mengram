@@ -50,6 +50,18 @@ var _MengramClient = class {
     this.baseUrl = (options.baseUrl || "https://mengram.io").replace(/\/$/, "");
     this.timeout = options.timeout || 3e4;
   }
+  /** Narrows whatever the server sent into something safe to read.
+   *
+   *  requestUrl hands back `any`, and asserting `as ApiResponse` only told
+   *  the compiler to stop asking — a non-object body (an HTML error page, a
+   *  proxy's plain-text 502) would then throw on the first property access,
+   *  surfacing as an unrelated TypeError instead of the real failure. */
+  static asResponse(body) {
+    if (body && typeof body === "object" && !Array.isArray(body)) {
+      return body;
+    }
+    return {};
+  }
   /** Header lookup that does not care about casing — Obsidian's requestUrl
    *  lowercases them, other runtimes do not. */
   static header(headers, name) {
@@ -95,7 +107,7 @@ var _MengramClient = class {
         const limit = Number(_MengramClient.header(response.headers, "x-ratelimit-limit"));
         if (Number.isFinite(limit) && limit > 0)
           this.rateLimitPerMin = limit;
-        const data = response.json;
+        const data = _MengramClient.asResponse(response.json);
         if (response.status >= 400) {
           if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
             lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);
@@ -199,6 +211,72 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
+  /** Declares every setting so Obsidian 1.13+ can find them from its own
+   *  settings search. Without this the panel still renders, but someone
+   *  typing "mengram" or "api key" into search gets nothing — and a setting
+   *  nobody can find may as well not exist.
+   *
+   *  display() below still draws the panel, and both read the same values
+   *  through getControlValue/setControlValue, so the two cannot disagree. */
+  getSettingDefinitions() {
+    return [
+      {
+        name: "API key",
+        desc: "Your API key (starts with `om-`). Get one at mengram.io/dashboard.",
+        control: { type: "text", key: "apiKey", placeholder: "om-\u2026" }
+      },
+      {
+        name: "Auto-sync on save",
+        desc: "Send a note to memory shortly after you stop editing it.",
+        control: { type: "toggle", key: "autoSync" }
+      },
+      {
+        name: "Sync folders",
+        desc: "Only sync these folders, comma-separated. Empty means the whole vault.",
+        control: { type: "text", key: "syncFolders", placeholder: "Projects, Notes" }
+      },
+      {
+        name: "Excluded folders",
+        desc: "Never sync these folders, comma-separated.",
+        control: { type: "text", key: "excludedFolders", placeholder: ".trash" }
+      },
+      {
+        name: "Debounce delay",
+        desc: "Milliseconds to wait after your last keystroke before syncing.",
+        control: { type: "number", key: "debounceMs", placeholder: "2000" }
+      },
+      {
+        name: "User ID",
+        desc: "Keeps separate people apart on one account.",
+        control: { type: "text", key: "userId", placeholder: "default" }
+      },
+      {
+        name: "Base URL",
+        desc: "API base URL. Only change for self-hosted instances.",
+        control: { type: "text", key: "baseUrl", placeholder: "https://mengram.io" }
+      },
+      {
+        name: "Memory folder",
+        desc: "Where pulled memory is written. Generated \u2014 do not keep your own notes here.",
+        control: { type: "text", key: "pullFolder", placeholder: "Mengram" }
+      },
+      {
+        name: "Pull automatically",
+        desc: "Minutes between background pulls. 0 keeps it manual.",
+        control: { type: "number", key: "pullIntervalMin", placeholder: "0" }
+      }
+    ];
+  }
+  getControlValue(key) {
+    return this.plugin.settings[key];
+  }
+  async setControlValue(key, value) {
+    const settings = this.plugin.settings;
+    settings[key] = value;
+    await this.plugin.saveSettings();
+    if (key === "apiKey" || key === "baseUrl")
+      this.plugin.reinitClient();
+  }
   display() {
     const { containerEl } = this;
     containerEl.empty();
@@ -224,7 +302,7 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.excludedFolders = value;
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Debounce delay (seconds)").setDesc("Wait this many seconds after editing before syncing.").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.debounceMs / 1e3).setDynamicTooltip().onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Debounce delay (seconds)").setDesc("Wait this many seconds after editing before syncing.").addSlider((slider) => slider.setLimits(1, 10, 1).setValue(this.plugin.settings.debounceMs / 1e3).onChange(async (value) => {
       this.plugin.settings.debounceMs = value * 1e3;
       await this.plugin.saveSettings();
     }));
@@ -326,7 +404,7 @@ var SyncEngine = class {
       return;
     const existing = this.debounceTimers.get(file.path);
     if (existing)
-      clearTimeout(existing);
+      window.clearTimeout(existing);
     const timer = window.setTimeout(() => {
       this.debounceTimers.delete(file.path);
       this.enqueue(file);
@@ -470,7 +548,7 @@ ${content}`;
   }
   destroy() {
     for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
+      window.clearTimeout(timer);
     }
     this.debounceTimers.clear();
     this.queue = [];
@@ -596,7 +674,7 @@ var MengramSearchModal = class extends import_obsidian5.Modal {
     });
     this.inputEl.addEventListener("input", () => {
       if (this.searchTimeout)
-        clearTimeout(this.searchTimeout);
+        window.clearTimeout(this.searchTimeout);
       this.searchTimeout = window.setTimeout(() => {
         const query = this.inputEl.value.trim();
         if (query.length >= 3) {
@@ -705,7 +783,7 @@ var MengramSearchModal = class extends import_obsidian5.Modal {
   }
   onClose() {
     if (this.searchTimeout)
-      clearTimeout(this.searchTimeout);
+      window.clearTimeout(this.searchTimeout);
     const { contentEl } = this;
     contentEl.empty();
   }

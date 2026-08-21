@@ -96,7 +96,7 @@ export class SyncEngine {
         if (!this.shouldSync(file)) return;
 
         const existing = this.debounceTimers.get(file.path);
-        if (existing) clearTimeout(existing);
+        if (existing) window.clearTimeout(existing);
 
         const timer = window.setTimeout(() => {
             this.debounceTimers.delete(file.path);
@@ -259,7 +259,7 @@ export class SyncEngine {
 
     destroy(): void {
         for (const timer of this.debounceTimers.values()) {
-            clearTimeout(timer);
+            window.clearTimeout(timer);
         }
         this.debounceTimers.clear();
         this.queue = [];

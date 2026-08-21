@@ -66,6 +66,19 @@ export class MengramClient {
         this.timeout = options.timeout || 30000;
     }
 
+    /** Narrows whatever the server sent into something safe to read.
+     *
+     *  requestUrl hands back `any`, and asserting `as ApiResponse` only told
+     *  the compiler to stop asking — a non-object body (an HTML error page, a
+     *  proxy's plain-text 502) would then throw on the first property access,
+     *  surfacing as an unrelated TypeError instead of the real failure. */
+    private static asResponse(body: unknown): ApiResponse {
+        if (body && typeof body === 'object' && !Array.isArray(body)) {
+            return body as ApiResponse;
+        }
+        return {};
+    }
+
     /** Header lookup that does not care about casing — Obsidian's requestUrl
      *  lowercases them, other runtimes do not. */
     private static header(headers: Record<string, string> | undefined, name: string): string | undefined {
@@ -115,7 +128,7 @@ export class MengramClient {
                 const limit = Number(MengramClient.header(response.headers, 'x-ratelimit-limit'));
                 if (Number.isFinite(limit) && limit > 0) this.rateLimitPerMin = limit;
 
-                const data = response.json as ApiResponse;
+                const data = MengramClient.asResponse(response.json);
                 if (response.status >= 400) {
                     if ([429, 502, 503, 504].includes(response.status) && attempt < 2) {
                         lastErr = new MengramError(data.detail || `HTTP ${response.status}`, response.status);

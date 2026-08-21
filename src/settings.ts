@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
+import type { SettingDefinitionItem } from 'obsidian';
 import type MengramPlugin from './main';
 
 export interface MengramSettings {
@@ -35,6 +36,76 @@ export class MengramSettingTab extends PluginSettingTab {
     constructor(app: App, plugin: MengramPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+    }
+
+    /** Declares every setting so Obsidian 1.13+ can find them from its own
+     *  settings search. Without this the panel still renders, but someone
+     *  typing "mengram" or "api key" into search gets nothing — and a setting
+     *  nobody can find may as well not exist.
+     *
+     *  display() below still draws the panel, and both read the same values
+     *  through getControlValue/setControlValue, so the two cannot disagree. */
+    getSettingDefinitions(): SettingDefinitionItem[] {
+        return [
+            {
+                name: 'API key',
+                desc: 'Your API key (starts with `om-`). Get one at mengram.io/dashboard.',
+                control: { type: 'text', key: 'apiKey', placeholder: 'om-…' },
+            },
+            {
+                name: 'Auto-sync on save',
+                desc: 'Send a note to memory shortly after you stop editing it.',
+                control: { type: 'toggle', key: 'autoSync' },
+            },
+            {
+                name: 'Sync folders',
+                desc: 'Only sync these folders, comma-separated. Empty means the whole vault.',
+                control: { type: 'text', key: 'syncFolders', placeholder: 'Projects, Notes' },
+            },
+            {
+                name: 'Excluded folders',
+                desc: 'Never sync these folders, comma-separated.',
+                control: { type: 'text', key: 'excludedFolders', placeholder: '.trash' },
+            },
+            {
+                name: 'Debounce delay',
+                desc: 'Milliseconds to wait after your last keystroke before syncing.',
+                control: { type: 'number', key: 'debounceMs', placeholder: '2000' },
+            },
+            {
+                name: 'User ID',
+                desc: 'Keeps separate people apart on one account.',
+                control: { type: 'text', key: 'userId', placeholder: 'default' },
+            },
+            {
+                name: 'Base URL',
+                desc: 'API base URL. Only change for self-hosted instances.',
+                control: { type: 'text', key: 'baseUrl', placeholder: 'https://mengram.io' },
+            },
+            {
+                name: 'Memory folder',
+                desc: 'Where pulled memory is written. Generated — do not keep your own notes here.',
+                control: { type: 'text', key: 'pullFolder', placeholder: 'Mengram' },
+            },
+            {
+                name: 'Pull automatically',
+                desc: 'Minutes between background pulls. 0 keeps it manual.',
+                control: { type: 'number', key: 'pullIntervalMin', placeholder: '0' },
+            },
+        ];
+    }
+
+    getControlValue(key: string): unknown {
+        return (this.plugin.settings as unknown as Record<string, unknown>)[key];
+    }
+
+    async setControlValue(key: string, value: unknown): Promise<void> {
+        const settings = this.plugin.settings as unknown as Record<string, unknown>;
+        settings[key] = value;
+        await this.plugin.saveSettings();
+        // The key and the base URL decide which server the client talks to, so
+        // changing either has to rebuild it or the next call goes to the old one.
+        if (key === 'apiKey' || key === 'baseUrl') this.plugin.reinitClient();
     }
 
     display(): void {
@@ -93,7 +164,6 @@ export class MengramSettingTab extends PluginSettingTab {
             .addSlider(slider => slider
                 .setLimits(1, 10, 1)
                 .setValue(this.plugin.settings.debounceMs / 1000)
-                .setDynamicTooltip()
                 .onChange(async (value) => {
                     this.plugin.settings.debounceMs = value * 1000;
                     await this.plugin.saveSettings();

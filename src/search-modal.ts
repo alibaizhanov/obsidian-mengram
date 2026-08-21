@@ -37,7 +37,7 @@ export class MengramSearchModal extends Modal {
         });
 
         this.inputEl.addEventListener('input', () => {
-            if (this.searchTimeout) clearTimeout(this.searchTimeout);
+            if (this.searchTimeout) window.clearTimeout(this.searchTimeout);
             this.searchTimeout = window.setTimeout(() => {
                 const query = this.inputEl.value.trim();
                 if (query.length >= 3) {
@@ -163,7 +163,7 @@ export class MengramSearchModal extends Modal {
     }
 
     onClose(): void {
-        if (this.searchTimeout) clearTimeout(this.searchTimeout);
+        if (this.searchTimeout) window.clearTimeout(this.searchTimeout);
         const { contentEl } = this;
         contentEl.empty();
     }
