@@ -8,9 +8,14 @@ export interface PullResult {
     removed: number;
 }
 
-/** The root the server serialises under. Rewritten to the user's folder on the
- *  way in, so someone who wants their memory in `Notes/Brain` gets it there. */
-const SERVER_ROOT = 'Mengram/';
+/** Roots the server may serialise under, rewritten to the user's folder on the
+ *  way in so someone who wants their memory in `Notes/Brain` gets it there.
+ *
+ *  Two of them, because the format was published as memfmt and the root became
+ *  `memory/`; `Mengram/` is what every export before that used. Accepting both
+ *  means a plugin update and a server deploy do not have to land in the same
+ *  minute — whichever arrives first, files still land where the user asked. */
+const SERVER_ROOTS = ['memory/', 'Mengram/'];
 
 /**
  * Brings memory into the vault as files.
@@ -45,9 +50,13 @@ export class PullEngine {
     }
 
     private localPath(serverPath: string): string {
-        const tail = serverPath.startsWith(SERVER_ROOT)
-            ? serverPath.slice(SERVER_ROOT.length)
-            : serverPath;
+        let tail = serverPath;
+        for (const root of SERVER_ROOTS) {
+            if (serverPath.startsWith(root)) {
+                tail = serverPath.slice(root.length);
+                break;
+            }
+        }
         return normalizePath(`${this.root}/${tail}`);
     }
 

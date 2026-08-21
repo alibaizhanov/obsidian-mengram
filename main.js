@@ -565,7 +565,7 @@ ${content}`;
 
 // src/pull.ts
 var import_obsidian4 = require("obsidian");
-var SERVER_ROOT = "Mengram/";
+var SERVER_ROOTS = ["memory/", "Mengram/"];
 var PullEngine = class {
   constructor(vault, settings) {
     this.client = null;
@@ -582,7 +582,13 @@ var PullEngine = class {
     return (0, import_obsidian4.normalizePath)((this.settings.pullFolder || "Mengram").replace(/^\/+|\/+$/g, ""));
   }
   localPath(serverPath) {
-    const tail = serverPath.startsWith(SERVER_ROOT) ? serverPath.slice(SERVER_ROOT.length) : serverPath;
+    let tail = serverPath;
+    for (const root of SERVER_ROOTS) {
+      if (serverPath.startsWith(root)) {
+        tail = serverPath.slice(root.length);
+        break;
+      }
+    }
     return (0, import_obsidian4.normalizePath)(`${this.root}/${tail}`);
   }
   /** Create every folder on the way to a file. The vault API will not do it
