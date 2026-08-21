@@ -88,9 +88,9 @@ export class MengramSearchModal extends Modal {
         const card = this.resultsEl.createDiv({ cls: 'mengram-result-card' });
 
         const header = card.createDiv({ cls: 'mengram-result-header' });
-        header.createEl('span', { text: result.entity, cls: 'mengram-result-entity' });
-        header.createEl('span', { text: result.type, cls: 'mengram-result-type' });
-        header.createEl('span', {
+        header.createSpan({ text: result.entity, cls: 'mengram-result-entity' });
+        header.createSpan({ text: result.type, cls: 'mengram-result-type' });
+        header.createSpan({
             text: `${Math.round(result.score * 100)}%`,
             cls: 'mengram-result-score',
         });

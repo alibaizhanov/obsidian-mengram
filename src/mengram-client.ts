@@ -190,7 +190,17 @@ export class MengramClient {
             params.sub_user_id = options.userId;
         }
         const data = await this._request('GET', '/v1/export', undefined, params);
-        return (data.files as Record<string, string>) || {};
+        // Validated rather than asserted: `data.files` is unknown, and casting
+        // it made every read downstream unsafe. A malformed payload should
+        // yield an empty tree, not a pull that writes junk into a vault.
+        const files: Record<string, string> = {};
+        const raw = data.files;
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+            for (const [path, text] of Object.entries(raw as Record<string, unknown>)) {
+                if (typeof text === 'string') files[path] = text;
+            }
+        }
+        return files;
     }
 
     async stats(options: { userId?: string } = {}): Promise<StatsResult> {

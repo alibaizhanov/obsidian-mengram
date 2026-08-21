@@ -89,7 +89,7 @@ export class MengramSettingTab extends PluginSettingTab {
             },
             {
                 name: 'Pull automatically',
-                desc: 'Minutes between background pulls. 0 keeps it manual.',
+                desc: 'Minutes between background pulls. Set to 0 to keep it manual.',
                 control: { type: 'number', key: 'pullIntervalMin', placeholder: '0' },
             },
         ];
@@ -192,7 +192,9 @@ export class MengramSettingTab extends PluginSettingTab {
                     this.plugin.reinitClient();
                 }));
 
-        containerEl.createEl('h3', { text: 'Memory in your vault' });
+        new Setting(containerEl)
+            .setName('Memory in your vault')
+            .setHeading();
         containerEl.createEl('p', {
             text: 'Pull writes your memory into the vault as Markdown — a file per '
                 + 'entity, relations as links, so the graph view works on it. That '
@@ -214,7 +216,7 @@ export class MengramSettingTab extends PluginSettingTab {
 
         new Setting(containerEl)
             .setName('Pull automatically')
-            .setDesc('Minutes between background pulls. 0 keeps it manual — run "Pull memory into vault" when you want it.')
+            .setDesc('Minutes between background pulls. Set to 0 to keep it manual and pull from the command palette instead.')
             .addText(text => text
                 .setPlaceholder('0')
                 .setValue(String(this.plugin.settings.pullIntervalMin))

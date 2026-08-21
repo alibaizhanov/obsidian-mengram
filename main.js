@@ -164,7 +164,15 @@ var _MengramClient = class {
       params.sub_user_id = options.userId;
     }
     const data = await this._request("GET", "/v1/export", void 0, params);
-    return data.files || {};
+    const files = {};
+    const raw = data.files;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      for (const [path, text] of Object.entries(raw)) {
+        if (typeof text === "string")
+          files[path] = text;
+      }
+    }
+    return files;
   }
   async stats(options = {}) {
     const params = {};
@@ -262,7 +270,7 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
       },
       {
         name: "Pull automatically",
-        desc: "Minutes between background pulls. 0 keeps it manual.",
+        desc: "Minutes between background pulls. Set to 0 to keep it manual.",
         control: { type: "number", key: "pullIntervalMin", placeholder: "0" }
       }
     ];
@@ -315,7 +323,7 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
       await this.plugin.saveSettings();
       this.plugin.reinitClient();
     }));
-    containerEl.createEl("h3", { text: "Memory in your vault" });
+    new import_obsidian2.Setting(containerEl).setName("Memory in your vault").setHeading();
     containerEl.createEl("p", {
       text: "Pull writes your memory into the vault as Markdown \u2014 a file per entity, relations as links, so the graph view works on it. That folder is generated: edits inside it are replaced on the next pull. Edit your own notes instead; those sync the other way.",
       cls: "setting-item-description"
@@ -324,7 +332,7 @@ var MengramSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.plugin.settings.pullFolder = value.trim() || "Mengram";
       await this.plugin.saveSettings();
     }));
-    new import_obsidian2.Setting(containerEl).setName("Pull automatically").setDesc('Minutes between background pulls. 0 keeps it manual \u2014 run "Pull memory into vault" when you want it.').addText((text) => text.setPlaceholder("0").setValue(String(this.plugin.settings.pullIntervalMin)).onChange(async (value) => {
+    new import_obsidian2.Setting(containerEl).setName("Pull automatically").setDesc("Minutes between background pulls. Set to 0 to keep it manual and pull from the command palette instead.").addText((text) => text.setPlaceholder("0").setValue(String(this.plugin.settings.pullIntervalMin)).onChange(async (value) => {
       const minutes = Number(value);
       this.plugin.settings.pullIntervalMin = Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : 0;
       await this.plugin.saveSettings();
@@ -717,9 +725,9 @@ var MengramSearchModal = class extends import_obsidian5.Modal {
   renderResult(result) {
     const card = this.resultsEl.createDiv({ cls: "mengram-result-card" });
     const header = card.createDiv({ cls: "mengram-result-header" });
-    header.createEl("span", { text: result.entity, cls: "mengram-result-entity" });
-    header.createEl("span", { text: result.type, cls: "mengram-result-type" });
-    header.createEl("span", {
+    header.createSpan({ text: result.entity, cls: "mengram-result-entity" });
+    header.createSpan({ text: result.type, cls: "mengram-result-type" });
+    header.createSpan({
       text: `${Math.round(result.score * 100)}%`,
       cls: "mengram-result-score"
     });

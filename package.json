@@ -1,21 +1,30 @@
 {
     "name": "obsidian-mengram",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Mengram AI memory plugin for Obsidian",
     "main": "main.js",
     "type": "module",
     "scripts": {
         "dev": "node esbuild.config.mjs",
-        "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+        "build": "tsc -noEmit -skipLibCheck && eslint src/ && node esbuild.config.mjs production",
+        "lint": "eslint src/"
     },
-    "keywords": ["obsidian", "mengram", "ai", "memory"],
+    "keywords": [
+        "obsidian",
+        "mengram",
+        "ai",
+        "memory"
+    ],
     "author": "Ali Baizhanov",
     "license": "MIT",
     "devDependencies": {
         "@types/node": "^16.11.6",
         "esbuild": "0.17.3",
+        "eslint": "10.9.0",
+        "eslint-plugin-obsidianmd": "0.4.1",
         "obsidian": "latest",
         "tslib": "2.4.0",
-        "typescript": "4.7.4"
+        "typescript": "5.9.3",
+        "typescript-eslint": "8.67.0"
     }
 }
